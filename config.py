@@ -23,6 +23,20 @@ FIELDS = {
 
 
 def get(key: str) -> str | None:
+    # 0. Check local .env file if present
+    env_file = os.path.join(os.path.dirname(__file__), ".env")
+    if os.path.exists(env_file):
+        try:
+            with open(env_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        if k.strip().lower() == key.lower() or k.strip().upper() == key.upper():
+                            return v.strip().strip("'\"")
+        except Exception:
+            pass
+
     # 1. Check environment variables (e.g. GEMINI_API_KEY or gemini_api_key, used by Streamlit Cloud)
     env_val = os.environ.get(key.upper()) or os.environ.get(key)
     if env_val:
