@@ -20,16 +20,26 @@ import queue
 import logging
 import threading
 import tempfile
-import yt_dlp
-import av
-import pygame
 
-# Initialize pygame mixer if not already done
-if not pygame.mixer.get_init():
-    try:
-        pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=1024)
-    except Exception as e:
-        print(f"[MusicPlayer] Pygame init error: {e}")
+try:
+    import yt_dlp
+except Exception:
+    yt_dlp = None
+
+try:
+    import av
+except Exception:
+    av = None
+
+try:
+    import pygame
+    if not pygame.mixer.get_init():
+        try:
+            pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=1024)
+        except Exception as e:
+            pass
+except Exception:
+    pygame = None
 
 CACHE_DIR = os.path.join(os.path.dirname(__file__), ".music_cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
@@ -267,6 +277,8 @@ def play(query: str) -> str:
     and playback, and returns verbal confirmation.
     """
     global _worker_thread
+    if not pygame:
+        return f"Local music playback requires desktop mode. Requested: {query}"
 
     clean_q = query.strip()
     if not clean_q or clean_q.lower() in ("music", "song", "something", "any song"):
