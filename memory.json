@@ -1,0 +1,32 @@
+{
+  "user_profile": {
+    "name": "Nakul",
+    "education": "B.Tech in Data Science",
+    "specialization": "Data Science",
+    "college": "UPES (University of Petroleum and Energy Studies, Dehradun)",
+    "career_goal": "Data Scientist / Machine Learning Engineer",
+    "notes_summary": ""
+  },
+  "facts": [
+    {
+      "fact": "Nakul is studying B.Tech in Data Science at UPES.",
+      "timestamp": "2026-11-02 16:11:16"
+    },
+    {
+      "fact": "Nakul is preparing for a career in Data Science and Machine Learning.",
+      "timestamp": "2026-11-02 16:40:00"
+    },
+    {
+      "fact": "UPES student portal ID is 8920458516",
+      "timestamp": "2026-11-02 23:48:44"
+    }
+  ],
+  "notes": [
+    {
+      "title": "Notepad Entry",
+      "content": "I am doing BTEC in Data Science",
+      "timestamp": "2026-11-02 16:40:00"
+    }
+  ],
+  "recent_topics": []
+}

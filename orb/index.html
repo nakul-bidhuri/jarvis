@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    background: transparent;
+    overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+    font-family: -apple-system, Segoe UI, sans-serif;
+  }
+  #stage {
+    width: 260px; height: 260px;
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #orb {
+    width: 220px; height: 220px;
+    border-radius: 50%;
+    position: relative;
+    background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.15), rgba(20,20,40,0.35) 60%, rgba(10,10,25,0.55) 100%);
+    box-shadow:
+      0 0 60px 10px var(--glow, rgba(90,120,255,0.35)),
+      inset 0 0 40px rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    backdrop-filter: blur(2px);
+    transition: box-shadow 0.6s ease, transform 0.4s ease;
+    overflow: hidden;
+  }
+  #orb.idle { --glow: rgba(120,120,160,0.15); transform: scale(0.9); opacity: 0.55; }
+  #orb.listening { --glow: rgba(56,189,248,0.55); animation: pulse 1.4s ease-in-out infinite; }
+  #orb.speaking { --glow: rgba(168,85,247,0.6); animation: pulse 0.9s ease-in-out infinite; }
+
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.04); }
+  }
+
+  svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+  .wave {
+    fill: none;
+    stroke-width: 2.4;
+    filter: drop-shadow(0 0 6px currentColor);
+    opacity: 0.9;
+  }
+  #orb.idle .wave { animation-play-state: paused; opacity: 0.3; }
+  #orb.listening .wave1 { stroke: #38bdf8; animation: flow 2.2s linear infinite; }
+  #orb.listening .wave2 { stroke: #7dd3fc; animation: flow 1.6s linear infinite reverse; }
+  #orb.speaking .wave1 { stroke: #a855f7; animation: flow 1s linear infinite; }
+  #orb.speaking .wave2 { stroke: #d8b4fe; animation: flow 0.7s linear infinite reverse; }
+  #orb.idle .wave1, #orb.idle .wave2 { stroke: #7c7ca0; }
+
+  @keyframes flow {
+    0% { stroke-dashoffset: 0; }
+    100% { stroke-dashoffset: -300; }
+  }
+
+  #label {
+    position: absolute; bottom: -34px;
+    color: rgba(255,255,255,0.6);
+    font-size: 13px; letter-spacing: 0.5px;
+    transition: opacity 0.3s ease;
+  }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <div id="orb" class="idle">
+      <svg viewBox="0 0 220 220">
+        <path class="wave wave1" stroke-dasharray="8 6"
+          d="M20,110 C60,60 90,160 110,110 C130,60 160,160 200,110" />
+        <path class="wave wave2" stroke-dasharray="6 5"
+          d="M20,120 C55,150 95,70 110,120 C125,150 165,70 200,120" />
+      </svg>
+    </div>
+    <div id="label">idle</div>
+  </div>
+
+<script>
+  const orb = document.getElementById('orb');
+  const label = document.getElementById('label');
+
+  // Called from Python via window.evaluate_js("setState('listening')")
+  function setState(state) {
+    orb.className = state;             // 'idle' | 'listening' | 'speaking'
+    label.textContent = state;
+  }
+  window.setState = setState;
+
+  // Called rapidly from Python while the user is talking, with a 0-1
+  // loudness value, so the orb visibly reacts to actual voice volume
+  // instead of a fixed canned animation.
+  function setAmplitude(level) {
+    const scale = 1 + Math.min(0.18, level * 0.22);
+    orb.style.transform = `scale(${scale})`;
+  }
+  window.setAmplitude = setAmplitude;
+</script>
+</body>
+</html>
