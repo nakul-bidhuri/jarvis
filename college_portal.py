@@ -7,7 +7,10 @@ Nakul's UPES student portal (myupes-beta.upes.ac.in).
 
 import time
 import webbrowser
-import pyperclip
+try:
+    import pyperclip
+except Exception:
+    pyperclip = None
 import config
 import memory_manager
 
@@ -43,7 +46,8 @@ def login_and_open() -> str:
         return "I opened the UPES portal. You haven't saved your login credentials yet. Just tell me: 'save my UPES credentials' to set them up."
 
     # Copy student ID to clipboard so the user can paste instantly
-    pyperclip.copy(u)
+    if pyperclip:
+        pyperclip.copy(u)
     webbrowser.open(PORTAL_URL)
     return f"Opening UPES portal. Your student ID {u} is copied to your clipboard."
 
