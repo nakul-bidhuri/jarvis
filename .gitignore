@@ -2,6 +2,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.tmp
+.env
+*.env
+secrets.toml
+.streamlit/secrets.toml
 .music_cache/
 .venv/
 env/
