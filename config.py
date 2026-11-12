@@ -5,6 +5,7 @@ Secrets (Gemini API key, Gmail app password, UPES portal credentials)
 are stored in the Windows Credential Manager via the `keyring` library, not in plain text files.
 """
 
+import os
 import keyring
 
 SERVICE = "JarvisAssistant"
@@ -22,7 +23,27 @@ FIELDS = {
 
 
 def get(key: str) -> str | None:
-    return keyring.get_password(SERVICE, key)
+    # 1. Check environment variables (e.g. GEMINI_API_KEY or gemini_api_key, used by Streamlit Cloud)
+    env_val = os.environ.get(key.upper()) or os.environ.get(key)
+    if env_val:
+        return env_val
+        
+    # 2. Check Streamlit secrets if running inside a Streamlit app
+    try:
+        import streamlit as st
+        if hasattr(st, "secrets") and st.secrets:
+            if key.upper() in st.secrets:
+                return str(st.secrets[key.upper()])
+            if key in st.secrets:
+                return str(st.secrets[key])
+    except Exception:
+        pass
+
+    # 3. Fallback to Windows Credential Manager via keyring
+    try:
+        return keyring.get_password(SERVICE, key)
+    except Exception:
+        return None
 
 
 def set_value(key: str, value: str) -> None:
