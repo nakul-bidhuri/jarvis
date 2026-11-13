@@ -1,17 +1,18 @@
 """
 app.py – JARVIS 2.0 Spatial AI Operating System (Nexus Spatial Edition).
 
-Cinema-grade Dark Spatial Cyberpunk UI with Dynamic State Colors:
+Cinema-grade Dark Spatial Cyberpunk UI with Zero-Latency Client-Side Gemini Brain & Audio Pipeline:
  - 🟢 USER SPEAKING / LISTENING: Vibrant Neon Green (#00ff88) aura & expanding particle pulse
  - 🟣 JARVIS THINKING / PROCESSING: Cosmic Violet (#d946ef) swirling vortex & hyper-spin
- - 🔵 JARVIS SPEAKING / ANSWERING: Electric Cyan (#00f2fe) harmonic soundwave turbulence
+ - 🔵 JARVIS SPEAKING / ANSWERING: Electric Cyan (#00f2fe) voice synthesis & harmonic wave turbulence
+ - 🔊 Direct Browser Audio Synthesis: Solves iframe sandbox blocks, plays speech aloud instantly
+ - 🎙️ Direct Web-Speech + Gemini 2.5 Flash Bridge: Zero-latency voice interaction without broken page reloads
  - 🔴 Top-Left Live Status Pill: [ ● LIVE | MODE | CURRENT STATE ]
  - 🌐 3 Interactive Spatial Modes:
      1. ASSISTANT MODE: Central reactive AI core, weather & live market tickers, INTEL stream
      2. IMMERSIVE MODE: Curved 3D spatial glassmorphic carousel (MARKETS, PROJECTS, SPORTS, CALENDAR, WEATHER, AUDIO)
      3. HUMAN MODE: 3D Volumetric Particle Android Head with facial contour morphing
  - 🎨 Pure Dark Mode Enforced: Eliminates white-on-white or mismatched theme artifacts
- - 🎙️ Always-On Web-Speech Engine + WebAudio Synth TTS
 """
 
 import os
@@ -50,6 +51,9 @@ if "current_state" not in st.session_state:
     st.session_state.current_state = "IDLE"  # "IDLE" | "LISTENING" | "THINKING" | "SPEAKING"
 if "last_spoken" not in st.session_state:
     st.session_state.last_spoken = st.session_state.messages[-1]["content"]
+
+# Safe Retrieval of Gemini API Key
+gemini_key = config.get("gemini_api_key") or ""
 
 # Fetch live telemetry safely (works on both Windows local & Linux Streamlit Cloud)
 try:
@@ -113,12 +117,10 @@ if query_cmd:
     st.session_state.current_state = "SPEAKING"
 
 # ==================== STRICT CYBERPUNK DARK THEME ENFORCEMENT ====================
-# Eliminates all white boxes, white-on-white text, or mismatched Streamlit borders
 DARK_THEME_CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@500;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
-/* Force dark background on every root container */
 html, body, [data-testid="stAppViewContainer"], .stApp {
     background-color: #030712 !important;
     background-image: 
@@ -127,7 +129,6 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
     font-family: 'Inter', -apple-system, sans-serif !important;
 }
 
-/* Hide Streamlit default header, footer, hamburger, toolbar */
 #MainMenu, header, footer, .stDeployButton, [data-testid="stToolbar"], [data-testid="stHeader"] {
     visibility: hidden !important;
     display: none !important;
@@ -141,7 +142,6 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
     max-width: 100% !important;
 }
 
-/* Futuristic Mode Pill Buttons */
 div[data-testid="stHorizontalBlock"] button {
     background: rgba(10, 20, 38, 0.75) !important;
     border: 1px solid rgba(56, 189, 248, 0.3) !important;
@@ -164,7 +164,6 @@ div[data-testid="stHorizontalBlock"] button:hover {
     box-shadow: 0 0 20px rgba(0, 242, 254, 0.35) !important;
 }
 
-/* Custom Chat Input styling */
 div[data-testid="stChatInput"] {
     background: rgba(6, 16, 32, 0.92) !important;
     border: 1px solid rgba(0, 242, 254, 0.35) !important;
@@ -183,7 +182,6 @@ div[data-testid="stChatInput"] textarea::placeholder {
     color: rgba(148, 163, 184, 0.65) !important;
 }
 
-/* Remove any white borders or backgrounds */
 * {
     border-color: rgba(56, 189, 248, 0.2) !important;
 }
@@ -191,11 +189,10 @@ div[data-testid="stChatInput"] textarea::placeholder {
 """
 st.markdown(DARK_THEME_CSS, unsafe_allow_html=True)
 
-# Top Bar: Mode Selector & Telemetry Pills
+# Top Mode Switcher Bar
 col_mode_a, col_mode_b, col_mode_c, col_spacer, col_quick_test = st.columns([1.3, 1.4, 1.3, 2.5, 3.5])
 
 with col_mode_a:
-    btn_a_style = "color:#00f2fe !important; border-color:#00f2fe !important;" if st.session_state.ui_mode == "ASSISTANT MODE" else ""
     if st.button("🔵 ASSISTANT MODE", use_container_width=True):
         st.session_state.ui_mode = "ASSISTANT MODE"
         st.session_state.current_state = "IDLE"
@@ -219,10 +216,9 @@ with col_mode_c:
 with col_quick_test:
     st.markdown(
         f"<div style='text-align:right; font-family:JetBrains Mono,monospace; font-size:0.75rem; color:#94a3b8; padding-top:8px;'>"
-        f"<span style='color:#00ff88;'>● USER SPEAK: GREEN</span> • "
-        f"<span style='color:#d946ef;'>● THINKING: VIOLET</span> • "
-        f"<span style='color:#00f2fe;'>● SPEAKING: CYAN</span> • "
-        f"<span style='color:#38bdf8;'>CPU {cpu_val}</span></div>",
+        f"<span style='color:#00ff88;'>● GREEN: YOU SPEAK</span> • "
+        f"<span style='color:#d946ef;'>● VIOLET: THINKING</span> • "
+        f"<span style='color:#00f2fe;'>● CYAN: JARVIS SPEAKS</span></div>",
         unsafe_allow_html=True
     )
 
@@ -231,6 +227,7 @@ recent_msgs_json = json.dumps(st.session_state.messages[-5:])
 last_spoken_json = json.dumps(st.session_state.last_spoken)
 current_mode_str = st.session_state.ui_mode
 current_state_str = st.session_state.current_state
+gemini_key_json = json.dumps(gemini_key)
 clock_now = datetime.datetime.now().strftime("%H:%M")
 
 NEXUS_SPATIAL_HTML = f"""
@@ -266,7 +263,6 @@ NEXUS_SPATIAL_HTML = f"""
     mask-image: linear-gradient(to top, rgba(0,0,0,0.9) 15%, transparent 95%);
     -webkit-mask-image: linear-gradient(to top, rgba(0,0,0,0.9) 15%, transparent 95%);
     pointer-events: none; z-index: 1;
-    transition: all 0.5s ease;
   }}
 
   /* ---------------- TOP HUD STATUS PILL ---------------- */
@@ -310,7 +306,6 @@ NEXUS_SPATIAL_HTML = f"""
   }}
 
   /* Dynamic State Color Transformations */
-  /* 1. LISTENING = VIBRANT NEON GREEN */
   body.state-listening .live-dot {{
     background: #00ff88; box-shadow: 0 0 14px #00ff88, 0 0 25px #00ff88;
     animation: beaconBounce 1.2s infinite ease-in-out;
@@ -323,7 +318,6 @@ NEXUS_SPATIAL_HTML = f"""
     background: rgba(0, 255, 136, 0.2); color: #00ff88;
   }}
 
-  /* 2. THINKING = COSMIC VIOLET / PURPLE-MAGENTA */
   body.state-thinking .live-dot {{
     background: #d946ef; box-shadow: 0 0 14px #d946ef, 0 0 25px #d946ef;
     animation: beaconSpin 1.0s infinite linear;
@@ -336,7 +330,6 @@ NEXUS_SPATIAL_HTML = f"""
     background: rgba(217, 70, 239, 0.2); color: #d946ef;
   }}
 
-  /* 3. SPEAKING = ELECTRIC CYAN */
   body.state-speaking .live-dot {{
     background: #00f2fe; box-shadow: 0 0 14px #00f2fe, 0 0 25px #00f2fe;
     animation: beaconPulse 1.4s infinite ease-in-out;
@@ -363,20 +356,25 @@ NEXUS_SPATIAL_HTML = f"""
     100% {{ transform: scale(0.9); opacity: 0.6; }}
   }}
 
-  .top-right-clock {{
-    font-family: 'JetBrains Mono', monospace; font-size: 12.5px;
-    color: rgba(226, 241, 255, 0.8);
-    background: rgba(5, 12, 24, 0.75);
-    border: 1px solid rgba(255,255,255,0.12);
-    padding: 6px 14px; border-radius: 8px;
-    backdrop-filter: blur(12px);
+  .top-right-controls {{
+    display: flex; align-items: center; gap: 10px;
     pointer-events: auto;
-    display: flex; align-items: center; gap: 12px;
+  }}
+  .sound-test-btn {{
+    background: rgba(0, 242, 254, 0.16);
+    border: 1px solid rgba(0, 242, 254, 0.5);
+    color: #00f2fe; border-radius: 6px; padding: 5px 12px;
+    font-family: 'Orbitron', sans-serif; font-size: 10px; font-weight: 700;
+    cursor: pointer; transition: all 0.2s ease;
+  }}
+  .sound-test-btn:hover {{
+    background: rgba(0, 242, 254, 0.35);
+    box-shadow: 0 0 14px rgba(0, 242, 254, 0.5);
   }}
   .mic-toggle-btn {{
     background: rgba(56, 189, 248, 0.16);
     border: 1px solid rgba(56, 189, 248, 0.5);
-    color: #38bdf8; border-radius: 6px; padding: 4px 10px;
+    color: #38bdf8; border-radius: 6px; padding: 5px 12px;
     font-family: 'Orbitron', sans-serif; font-size: 10px; font-weight: 700;
     cursor: pointer; transition: all 0.2s ease;
   }}
@@ -591,6 +589,7 @@ NEXUS_SPATIAL_HTML = f"""
     max-width: 680px; width: 88%; text-align: center;
     z-index: 25; backdrop-filter: blur(14px);
     box-shadow: 0 6px 28px rgba(0,0,0,0.65);
+    cursor: pointer;
   }}
   .nexus-badge {{
     display: inline-block; font-family: 'Orbitron', sans-serif;
@@ -616,9 +615,10 @@ NEXUS_SPATIAL_HTML = f"""
       <span class="divider">|</span>
       <span class="state-badge" id="hud-state-label">STANDBY</span>
     </div>
-    <div class="top-right-clock">
+    <div class="top-right-controls">
+      <button class="sound-test-btn" onclick="testJarvisVoice()">🔊 TEST VOICE AUDIO</button>
       <button id="mic-btn" class="mic-toggle-btn" onclick="toggleBrowserVoice()">🎙️ AUTO-LISTEN: ON</button>
-      <span>{clock_now} IST</span>
+      <div style="font-family:'JetBrains Mono'; font-size:12px; color:#94a3b8;">{clock_now} IST</div>
     </div>
   </div>
 
@@ -672,7 +672,7 @@ NEXUS_SPATIAL_HTML = f"""
   </div>
 
   <!-- Live Voice Subtitle Bar -->
-  <div class="voice-subtitle-pill" id="subtitle-bar" style="display:none;">
+  <div class="voice-subtitle-pill" id="subtitle-bar" style="display:none;" onclick="repeatLastSpoken()">
     <span class="nexus-badge">● JARVIS</span>
     <span id="subtitle-text"></span>
   </div>
@@ -681,18 +681,65 @@ NEXUS_SPATIAL_HTML = f"""
   const INITIAL_MODE = {json.dumps(current_mode_str)};
   const MESSAGES = {recent_msgs_json};
   const LAST_SPOKEN = {last_spoken_json};
+  const GEMINI_KEY = {gemini_key_json};
 
   let currentMode = INITIAL_MODE;
   let currentState = 'IDLE'; // 'IDLE' | 'LISTENING' (Green) | 'THINKING' (Violet) | 'SPEAKING' (Cyan)
   let speakingIntensity = 0.0;
+  let currentSpokenText = LAST_SPOKEN || "";
 
-  // Populate Dialogue
+  // Web Audio Context for Acoustic Sci-Fi Chimes
+  let audioCtx = null;
+  function getAudioContext() {{
+    if (!audioCtx) {{
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }}
+    if (audioCtx.state === 'suspended') {{
+      audioCtx.resume();
+    }}
+    return audioCtx;
+  }}
+
+  function playSciFiBeep(type) {{
+    try {{
+      const ctx = getAudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      if (type === 'wake') {{
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.12);
+        gain.gain.setValueAtTime(0.12, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.12);
+      }} else if (type === 'think') {{
+        osc.frequency.setValueAtTime(580, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(740, ctx.currentTime + 0.08);
+        gain.gain.setValueAtTime(0.08, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.08);
+      }}
+    }} catch(e) {{}}
+  }}
+
+  // Dialogue Rendering
   const dialogueBox = document.getElementById('dialogue-box');
-  MESSAGES.slice(-3).forEach(m => {{
+  function addMessageToBox(role, text) {{
     const div = document.createElement('div');
-    div.className = 'msg-pill ' + (m.role === 'user' ? 'msg-user' : 'msg-assistant');
-    div.textContent = m.content;
+    div.className = 'msg-pill ' + (role === 'user' ? 'msg-user' : 'msg-assistant');
+    div.textContent = (role === 'user' ? 'YOU: ' : 'JARVIS: ') + text;
     dialogueBox.appendChild(div);
+    while (dialogueBox.children.length > 4) {{
+      dialogueBox.removeChild(dialogueBox.firstChild);
+    }}
+  }}
+
+  MESSAGES.slice(-3).forEach(m => {{
+    addMessageToBox(m.role, m.content);
   }});
 
   // Immersive Mode Cards Data
@@ -758,7 +805,6 @@ NEXUS_SPATIAL_HTML = f"""
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   container.appendChild(renderer.domElement);
 
-  // Dynamic Color Targets
   const colorCyan1 = new THREE.Color(0x00f2fe);
   const colorCyan2 = new THREE.Color(0x38bdf8);
   const colorGreen1 = new THREE.Color(0x00ff88); // Listening: Neon Green
@@ -780,7 +826,6 @@ NEXUS_SPATIAL_HTML = f"""
   const colors = new Float32Array(PARTICLE_COUNT * 3);
 
   for (let i = 0; i < PARTICLE_COUNT; i++) {{
-    // 1. Assistant Mode: Energy Orb
     const phi = Math.acos(-1 + (2 * i) / PARTICLE_COUNT);
     const theta = Math.sqrt(PARTICLE_COUNT * Math.PI) * phi;
     const rOrb = 35 + (Math.random() - 0.5) * 4.5;
@@ -788,7 +833,6 @@ NEXUS_SPATIAL_HTML = f"""
     orbPositions[i * 3 + 1] = rOrb * Math.sin(theta) * Math.sin(phi) + 22;
     orbPositions[i * 3 + 2] = rOrb * Math.cos(phi);
 
-    // 2. Human Mode: 3D Sculpted Android Head & Jaw
     const u = (i / PARTICLE_COUNT) * Math.PI * 2 * 19;
     const v = (i / PARTICLE_COUNT);
     let hx, hy, hz;
@@ -816,7 +860,6 @@ NEXUS_SPATIAL_HTML = f"""
     humanPositions[i * 3 + 1] = hy + (Math.random() - 0.5) * 1.4;
     humanPositions[i * 3 + 2] = hz + (Math.random() - 0.5) * 1.4;
 
-    // 3. Immersive Mode: Starfield Ring
     const angle = (i / PARTICLE_COUNT) * Math.PI * 2 * 4;
     const rad = 115 + (Math.random() - 0.5) * 70;
     immersivePositions[i * 3]     = rad * Math.cos(angle);
@@ -846,7 +889,6 @@ NEXUS_SPATIAL_HTML = f"""
   const particleSystem = new THREE.Points(geometry, material);
   scene.add(particleSystem);
 
-  // Inner Glowing Core
   const coreGeo = new THREE.SphereGeometry(22, 32, 32);
   const coreMat = new THREE.MeshBasicMaterial({{
     color: 0x00e5ff,
@@ -858,7 +900,6 @@ NEXUS_SPATIAL_HTML = f"""
   coreSphere.position.y = 22;
   scene.add(coreSphere);
 
-  // Orbital Ring
   const ringGeo = new THREE.RingGeometry(46, 47.4, 96);
   const ringMat = new THREE.MeshBasicMaterial({{
     color: 0x38bdf8, side: THREE.DoubleSide, transparent: true, opacity: 0.38
@@ -868,7 +909,6 @@ NEXUS_SPATIAL_HTML = f"""
   orbitalRing.rotation.x = Math.PI / 2.2;
   scene.add(orbitalRing);
 
-  // State Transition Function
   function setJarvisState(newState) {{
     currentState = newState;
     const body = document.body;
@@ -935,7 +975,6 @@ NEXUS_SPATIAL_HTML = f"""
   }}
   applyVisualMode(INITIAL_MODE);
 
-  // Animation Loop with Dynamic Color & Morphing
   const clock = new THREE.Clock();
   function animate() {{
     requestAnimationFrame(animate);
@@ -945,7 +984,6 @@ NEXUS_SPATIAL_HTML = f"""
     const arr = posAttr.array;
     const colArr = colAttr.array;
 
-    // Smooth color interpolation towards target state color
     currentColor1.lerp(targetColor1, 0.08);
     currentColor2.lerp(targetColor2, 0.08);
 
@@ -962,19 +1000,15 @@ NEXUS_SPATIAL_HTML = f"""
       let ty = targetArr[iy];
       let tz = targetArr[iz];
 
-      // Dynamic State Physics:
       if (isListening) {{
-        // Listening: Expanding Green Aura
         const expand = 1.0 + Math.sin(t * 12 + i * 0.1) * 0.09;
         tx *= expand; tz *= expand;
       }} else if (isThinking) {{
-        // Thinking: Swirling Cosmic Violet Vortex
         const angle = t * 4.5 + (i * 0.02);
         const radius = Math.sqrt(tx * tx + tz * tz);
         tx = Math.cos(angle) * radius;
         tz = Math.sin(angle) * radius;
       }} else if (speakingIntensity > 0.01) {{
-        // Speaking: Voice frequency ripple
         if (currentMode === 'HUMAN MODE' && ty > -18 && ty < -2 && tz > 15) {{
           ty += Math.sin(t * 28 + i) * 3.8 * speakingIntensity;
         }} else {{
@@ -987,7 +1021,6 @@ NEXUS_SPATIAL_HTML = f"""
       arr[iy] += (ty - arr[iy]) * 0.08;
       arr[iz] += (tz - arr[iz]) * 0.08;
 
-      // Update particle colors
       const chosenCol = (i % 2 === 0) ? currentColor1 : currentColor2;
       colArr[ix]     = chosenCol.r;
       colArr[ix + 1] = chosenCol.g;
@@ -996,7 +1029,6 @@ NEXUS_SPATIAL_HTML = f"""
     posAttr.needsUpdate = true;
     colAttr.needsUpdate = true;
 
-    // Rotation speed accelerates during Thinking
     const rotSpeed = isThinking ? 0.85 : 0.22;
     if (currentMode === 'HUMAN MODE') {{
       particleSystem.rotation.y = Math.sin(t * 0.55) * 0.22;
@@ -1018,63 +1050,202 @@ NEXUS_SPATIAL_HTML = f"""
     renderer.setSize(container.clientWidth, container.clientHeight);
   }});
 
-  // ---------------- SPEAK RESPONSE ALOUD + SHOW SUBTITLE ----------------
+  // ---------------- ROBUST AUDIBLE SPEECH SYNTHESIS ENGINE ----------------
+  let voicesList = [];
+  function loadVoices() {{
+    if ('speechSynthesis' in window) {{
+      voicesList = window.speechSynthesis.getVoices();
+    }}
+  }}
+  if ('speechSynthesis' in window) {{
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+    loadVoices();
+  }}
+
   function speakOut(text) {{
-    if (!text) return;
-    setJarvisState('SPEAKING'); // Shifts to Electric Cyan
+    if (!text || !text.trim()) return;
+    currentSpokenText = text;
+
+    setJarvisState('SPEAKING'); // Turns ELECTRIC CYAN
+
     const subBar = document.getElementById('subtitle-bar');
     const subText = document.getElementById('subtitle-text');
     subText.textContent = text;
-    if (currentMode !== 'ASSISTANT MODE') {{
-      subBar.style.display = 'block';
-    }}
+    subBar.style.display = 'block';
+
+    playSciFiBeep('wake');
+
     if ('speechSynthesis' in window) {{
-      window.speechSynthesis.cancel();
-      const utter = new SpeechSynthesisUtterance(text);
-      utter.rate = 1.04;
-      utter.pitch = 0.96;
-      utter.onstart = () => {{
-        speakingIntensity = 1.0;
-        setJarvisState('SPEAKING');
-      }};
-      utter.onend = () => {{
+      try {{
+        window.speechSynthesis.cancel();
+        if (window.speechSynthesis.paused) {{
+          window.speechSynthesis.resume();
+        }}
+
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.rate = 1.02;
+        utter.pitch = 0.98;
+        utter.volume = 1.0;
+        utter.lang = 'en-US';
+
+        if (!voicesList || voicesList.length === 0) {{
+          loadVoices();
+        }}
+        const naturalVoice = voicesList.find(v => 
+          v.lang.startsWith('en') && (
+            v.name.includes('Natural') || v.name.includes('Google') || 
+            v.name.includes('Guy') || v.name.includes('David') || v.name.includes('Ryan')
+          )
+        );
+        if (naturalVoice) utter.voice = naturalVoice;
+
+        utter.onstart = () => {{
+          speakingIntensity = 1.0;
+          setJarvisState('SPEAKING');
+        }};
+        utter.onend = () => {{
+          speakingIntensity = 0.0;
+          setJarvisState('IDLE');
+        }};
+        utter.onerror = (e) => {{
+          console.warn("Speech error, resetting state:", e);
+          speakingIntensity = 0.0;
+          setJarvisState('IDLE');
+        }};
+
+        window.speechSynthesis.speak(utter);
+      }} catch(err) {{
+        console.error("SpeechSynthesis error:", err);
         speakingIntensity = 0.0;
         setJarvisState('IDLE');
-      }};
-      utter.onerror = () => {{
-        speakingIntensity = 0.0;
-        setJarvisState('IDLE');
-      }};
-      window.speechSynthesis.speak(utter);
+      }}
     }}
   }}
 
-  if (LAST_SPOKEN) {{
-    speakOut(LAST_SPOKEN);
+  function repeatLastSpoken() {{
+    if (currentSpokenText) {{
+      speakOut(currentSpokenText);
+    }}
   }}
 
-  // ---------------- BROWSER WAKE-WORD & VOICE RECOGNITION ----------------
+  function testJarvisVoice() {{
+    getAudioContext();
+    speakOut("Jarvis audio systems fully operational, Nakul. I am ready.");
+  }}
+
+  // ---------------- DIRECT ZERO-LATENCY GEMINI REASONING BRIDGE ----------------
+  async function processVoiceQuery(userQuery) {{
+    if (!userQuery || !userQuery.trim()) return;
+
+    playSciFiBeep('think');
+    setJarvisState('THINKING'); // Turns COSMIC VIOLET
+
+    const lower = userQuery.toLowerCase().trim();
+
+    // 1. Client-Side Instant Transformation Modes
+    if (lower.includes('immersive mode') || lower.includes('carousel')) {{
+      applyVisualMode('IMMERSIVE MODE');
+      addMessageToBox('user', userQuery);
+      addMessageToBox('assistant', 'Immersive mode is now active.');
+      speakOut('Immersive mode is now active.');
+      return;
+    }}
+    if (lower.includes('into a human') || lower.includes('human mode') || lower.includes('avatar')) {{
+      applyVisualMode('HUMAN MODE');
+      addMessageToBox('user', userQuery);
+      addMessageToBox('assistant', "Understood. Give me a moment. I'm here, how can I help?");
+      speakOut("Understood. Give me a moment. I'm here, how can I help?");
+      return;
+    }}
+    if (lower.includes('assistant mode') || lower.includes('return to assistant')) {{
+      applyVisualMode('ASSISTANT MODE');
+      addMessageToBox('user', userQuery);
+      addMessageToBox('assistant', 'Returning to assistant mode.');
+      speakOut('Returning to assistant mode.');
+      return;
+    }}
+
+    addMessageToBox('user', userQuery);
+
+    // 2. Direct Gemini 2.5 Flash Processing (No Iframe Navigation Needed)
+    try {{
+      const apiKey = GEMINI_KEY;
+      if (!apiKey) {{
+        const msg = "I heard you, Nakul, but I need your Gemini API key configured to respond.";
+        addMessageToBox('assistant', msg);
+        speakOut(msg);
+        return;
+      }}
+
+      const sysInstruction = (
+        "You are Jarvis 2.0, Nakul's brilliant, witty AI companion and Spatial Voice OS. " +
+        "Nakul is studying B.Tech Data Science at UPES Dehradun. " +
+        "Converse in natural, spoken English (1 to 3 short sentences, British charm). " +
+        "Never use markdown formatting, asterisks, or bullet points in your reply so it sounds completely natural when spoken aloud."
+      );
+
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${{apiKey}}`;
+
+      const response = await fetch(endpoint, {{
+        method: 'POST',
+        headers: {{ 'Content-Type': 'application/json' }},
+        body: JSON.stringify({{
+          contents: [
+            {{ role: 'user', parts: [{{ text: sysInstruction + "\\n\\nNakul: " + userQuery }}] }}
+          ]
+        }})
+      }});
+
+      if (!response.ok) {{
+        throw new Error("HTTP " + response.status);
+      }}
+
+      const data = await response.json();
+      let replyText = "I processed your request, Nakul.";
+      if (data && data.candidates && data.candidates[0] && data.candidates[0].content) {{
+        replyText = data.candidates[0].content.parts[0].text;
+      }}
+
+      // Strip any residual asterisks or markdown
+      replyText = replyText.replace(/[*#`_]/g, '').trim();
+
+      addMessageToBox('assistant', replyText);
+      speakOut(replyText); // Speaks in ELECTRIC CYAN!
+    }} catch (error) {{
+      console.warn("Direct Gemini call fallback:", error);
+      const fallbackReply = "I heard your request: " + userQuery + ". All systems nominal.";
+      addMessageToBox('assistant', fallbackReply);
+      speakOut(fallbackReply);
+    }}
+  }}
+
+  // ---------------- ALWAYS-ON BROWSER SPEECH RECOGNITION ----------------
   let recognition = null;
   let autoListen = true;
 
   function initWebSpeech() {{
     const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRec) return;
+    if (!SpeechRec) {{
+      console.warn("Web Speech API not supported in this browser.");
+      return;
+    }}
+
     recognition = new SpeechRec();
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = 'en-IN';
 
     recognition.onaudiostart = () => {{
-      setJarvisState('LISTENING'); // Turns GREEN when speech/voice is detected!
+      getAudioContext();
+      setJarvisState('LISTENING'); // Turns NEON GREEN when user starts talking
     }};
 
     recognition.onspeechstart = () => {{
-      setJarvisState('LISTENING'); // Turns GREEN when user speaks!
+      setJarvisState('LISTENING');
     }};
 
     recognition.onspeechend = () => {{
-      setJarvisState('THINKING'); // Turns VIOLET when user stops and processing begins!
+      setJarvisState('THINKING'); // Turns COSMIC VIOLET when user pauses
     }};
 
     recognition.onresult = (event) => {{
@@ -1083,69 +1254,68 @@ NEXUS_SPATIAL_HTML = f"""
       const lower = transcript.toLowerCase();
 
       if (!latest.isFinal) {{
-        setJarvisState('LISTENING'); // Keep GREEN while user is speaking
+        setJarvisState('LISTENING');
         return;
       }}
 
-      // User finished sentence -> Enter THINKING state (VIOLET)
-      setJarvisState('THINKING');
-
-      // Instant client-side mode transitions
-      if (lower.includes('immersive mode')) {{
-        applyVisualMode('IMMERSIVE MODE');
-        speakOut('Immersive mode is now active.');
-        return;
-      }}
-      if (lower.includes('into a human') || lower.includes('human mode')) {{
-        applyVisualMode('HUMAN MODE');
-        speakOut('Understood, give me a moment. I am here, how can I help?');
-        return;
-      }}
-      if (lower.includes('assistant mode')) {{
-        applyVisualMode('ASSISTANT MODE');
-        speakOut('Returning to assistant mode.');
-        return;
-      }}
-
-      // Wake word check
+      // Check wake phrases or direct voice query
       const triggers = ['hey jarvis', 'jarvis', 'hey jervis', 'jervis', 'hey nexus', 'nexus'];
+      let matchedQuery = "";
       for (const trig of triggers) {{
         const idx = lower.indexOf(trig);
         if (idx !== -1) {{
-          const extracted = transcript.slice(idx + trig.length).trim() || transcript;
-          const url = new URL(window.parent.location.href);
-          url.searchParams.set('voice_cmd', extracted);
-          window.parent.location.href = url.toString();
+          matchedQuery = transcript.slice(idx + trig.length).trim();
           break;
         }}
+      }}
+
+      // If no prefix but active dialogue, use full transcript
+      if (!matchedQuery && transcript.length > 2) {{
+        matchedQuery = transcript;
+      }}
+
+      if (matchedQuery) {{
+        processVoiceQuery(matchedQuery);
+      }} else {{
+        setJarvisState('IDLE');
       }}
     }};
 
     recognition.onend = () => {{
       if (autoListen) {{
-        try {{ recognition.start(); }} catch (e) {{}}
+        try {{ recognition.start(); }} catch(e) {{}}
       }}
     }};
 
     try {{
       recognition.start();
       document.getElementById('mic-btn').classList.add('listening');
-    }} catch (e) {{}}
+    }} catch(e) {{}}
   }}
 
   function toggleBrowserVoice() {{
     const btn = document.getElementById('mic-btn');
     autoListen = !autoListen;
+    getAudioContext();
     if (autoListen) {{
       btn.textContent = '🎙️ AUTO-LISTEN: ON';
       btn.classList.add('listening');
-      if (recognition) try {{ recognition.start(); }} catch (e) {{}}
+      if (recognition) try {{ recognition.start(); }} catch(e) {{}}
     }} else {{
       btn.textContent = '🎙️ AUTO-LISTEN: OFF';
       btn.classList.remove('listening');
-      if (recognition) try {{ recognition.stop(); }} catch (e) {{}}
+      if (recognition) try {{ recognition.stop(); }} catch(e) {{}}
+      setJarvisState('IDLE');
     }}
   }}
+
+  // Unlock Audio on First Click Anywhere on Stage
+  document.addEventListener('click', () => {{
+    getAudioContext();
+    if ('speechSynthesis' in window && window.speechSynthesis.paused) {{
+      window.speechSynthesis.resume();
+    }}
+  }}, {{ once: true }});
 
   initWebSpeech();
 </script>
@@ -1156,7 +1326,7 @@ NEXUS_SPATIAL_HTML = f"""
 components.html(NEXUS_SPATIAL_HTML, height=620, scrolling=False)
 
 # Bottom Interactive Command Bar (Works via Text or Voice)
-user_prompt = st.chat_input("Say 'Hey Jarvis...' or enter directive (e.g., 'transform into immersive mode', 'transform into a human', 'how are the markets today')...")
+user_prompt = st.chat_input("Say 'Hey Jarvis...' or type directive (e.g. 'brief me', 'weather in Dehradun', 'transform into a human')...")
 if user_prompt:
     st.session_state.current_state = "THINKING"
     new_mode, mode_reply = detect_mode_switch(user_prompt, st.session_state.ui_mode)
