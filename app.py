@@ -228,6 +228,9 @@ last_spoken_json = json.dumps(st.session_state.last_spoken)
 current_mode_str = st.session_state.ui_mode
 current_state_str = st.session_state.current_state
 gemini_key_json = json.dumps(gemini_key)
+elevenlabs_key_json = json.dumps(config.get("elevenlabs_api_key") or "")
+voice_id_en_json = json.dumps(config.get("voice_id_en") or "fPIfC3elMLbN9tNwMXkw")
+voice_id_hi_json = json.dumps(config.get("voice_id_hi") or "7qBNUtXRGP0jPi0H4r8k")
 clock_now = datetime.datetime.now().strftime("%H:%M")
 
 NEXUS_SPATIAL_HTML = f"""
@@ -306,6 +309,42 @@ NEXUS_SPATIAL_HTML = f"""
   }}
 
   /* Dynamic State Color Transformations */
+  body.state-locked .live-dot {{
+    background: #ef4444; box-shadow: 0 0 14px #ef4444, 0 0 25px #ef4444;
+    animation: none;
+  }}
+  body.state-locked .live-pill {{
+    border-color: rgba(239, 68, 68, 0.5);
+    box-shadow: 0 0 25px rgba(239, 68, 68, 0.22);
+  }}
+  body.state-locked .state-badge {{
+    background: rgba(239, 68, 68, 0.2); color: #f87171;
+  }}
+
+  body.state-standby .live-dot {{
+    background: #f59e0b; box-shadow: 0 0 14px #f59e0b, 0 0 25px #f59e0b;
+    animation: beaconPulse 2.4s infinite ease-in-out;
+  }}
+  body.state-standby .live-pill {{
+    border-color: rgba(245, 158, 11, 0.6);
+    box-shadow: 0 0 25px rgba(245, 158, 11, 0.25);
+  }}
+  body.state-standby .state-badge {{
+    background: rgba(245, 158, 11, 0.2); color: #fbbf24;
+  }}
+
+  body.state-active .live-dot {{
+    background: #00f2fe; box-shadow: 0 0 14px #00f2fe, 0 0 25px #00f2fe;
+    animation: beaconBounce 2.0s infinite ease-in-out;
+  }}
+  body.state-active .live-pill {{
+    border-color: rgba(0, 242, 254, 0.65);
+    box-shadow: 0 0 30px rgba(0, 242, 254, 0.28);
+  }}
+  body.state-active .state-badge {{
+    background: rgba(0, 242, 254, 0.2); color: #00f2fe;
+  }}
+
   body.state-listening .live-dot {{
     background: #00ff88; box-shadow: 0 0 14px #00ff88, 0 0 25px #00ff88;
     animation: beaconBounce 1.2s infinite ease-in-out;
@@ -357,18 +396,53 @@ NEXUS_SPATIAL_HTML = f"""
   }}
 
   .top-right-controls {{
-    display: flex; align-items: center; gap: 10px;
+    display: flex; align-items: center; gap: 8px;
     pointer-events: auto;
   }}
+  .ignition-btn {{
+    display: flex; align-items: center; gap: 6px;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.55);
+    color: #f87171; border-radius: 6px; padding: 5px 12px;
+    font-family: 'Orbitron', sans-serif; font-size: 10px; font-weight: 700;
+    cursor: pointer; transition: all 0.25s ease;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.2);
+  }}
+  .ignition-btn.ignited {{
+    background: rgba(0, 255, 136, 0.18);
+    border-color: rgba(0, 255, 136, 0.65);
+    color: #00ff88; box-shadow: 0 0 14px rgba(0, 255, 136, 0.3);
+  }}
+  .ignition-btn:hover {{
+    transform: translateY(-1px);
+    box-shadow: 0 0 18px rgba(0, 242, 254, 0.35);
+  }}
+  .hotkey-hint {{
+    background: rgba(255, 255, 255, 0.15); padding: 1px 5px;
+    border-radius: 3px; font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; color: #ffffff;
+  }}
+  .lang-toggle-btn {{
+    background: rgba(56, 189, 248, 0.15);
+    border: 1px solid rgba(56, 189, 248, 0.45);
+    color: #38bdf8; border-radius: 6px; padding: 5px 11px;
+    font-family: 'Orbitron', sans-serif; font-size: 10px; font-weight: 700;
+    cursor: pointer; transition: all 0.2s ease;
+  }}
+  .lang-toggle-btn:hover {{
+    background: rgba(56, 189, 248, 0.3);
+    border-color: #00f2fe; color: #ffffff;
+    box-shadow: 0 0 12px rgba(0, 242, 254, 0.35);
+  }}
   .sound-test-btn {{
-    background: rgba(0, 242, 254, 0.16);
-    border: 1px solid rgba(0, 242, 254, 0.5);
-    color: #00f2fe; border-radius: 6px; padding: 5px 12px;
+    background: rgba(0, 242, 254, 0.14);
+    border: 1px solid rgba(0, 242, 254, 0.45);
+    color: #00f2fe; border-radius: 6px; padding: 5px 11px;
     font-family: 'Orbitron', sans-serif; font-size: 10px; font-weight: 700;
     cursor: pointer; transition: all 0.2s ease;
   }}
   .sound-test-btn:hover {{
-    background: rgba(0, 242, 254, 0.35);
+    background: rgba(0, 242, 254, 0.3);
     box-shadow: 0 0 14px rgba(0, 242, 254, 0.5);
   }}
   .mic-toggle-btn {{
@@ -599,7 +673,7 @@ NEXUS_SPATIAL_HTML = f"""
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
-<body class="state-idle">
+<body class="state-locked">
 
   <!-- 3D WebGL Hologram Stage -->
   <div id="webgl-stage"></div>
@@ -613,11 +687,12 @@ NEXUS_SPATIAL_HTML = f"""
       <span class="divider">|</span>
       <span class="mode-text" id="hud-mode-label">{current_mode_str}</span>
       <span class="divider">|</span>
-      <span class="state-badge" id="hud-state-label">STANDBY</span>
+      <span class="state-badge" id="hud-state-label">LOCKED</span>
     </div>
     <div class="top-right-controls">
+      <button id="ignition-btn" class="ignition-btn" onclick="toggleIgnition()">🔑 IGNITION <span class="hotkey-hint">Ctrl+Alt+J</span> <span id="ignition-status-text">[LOCKED]</span></button>
+      <button id="lang-btn" class="lang-toggle-btn" onclick="toggleLanguage()">🌐 <span id="lang-label">ENGLISH</span></button>
       <button class="sound-test-btn" onclick="testJarvisVoice()">🔊 TEST VOICE AUDIO</button>
-      <button id="mic-btn" class="mic-toggle-btn" onclick="toggleBrowserVoice()">🎙️ AUTO-LISTEN: ON</button>
       <div style="font-family:'JetBrains Mono'; font-size:12px; color:#94a3b8;">{clock_now} IST</div>
     </div>
   </div>
@@ -672,9 +747,9 @@ NEXUS_SPATIAL_HTML = f"""
   </div>
 
   <!-- Live Voice Subtitle Bar -->
-  <div class="voice-subtitle-pill" id="subtitle-bar" style="display:none;" onclick="repeatLastSpoken()">
-    <span class="nexus-badge">● JARVIS</span>
-    <span id="subtitle-text"></span>
+  <div class="voice-subtitle-pill" id="subtitle-bar" style="display:block;" onclick="repeatLastSpoken()">
+    <span class="nexus-badge" id="status-badge-prefix">🔒 LOCKED</span>
+    <span id="subtitle-text">Jarvis is in locked mode. Press Ctrl+Alt+J or click the Ignition key to start standby.</span>
   </div>
 
 <script>
@@ -682,9 +757,16 @@ NEXUS_SPATIAL_HTML = f"""
   const MESSAGES = {recent_msgs_json};
   const LAST_SPOKEN = {last_spoken_json};
   const GEMINI_KEY = {gemini_key_json};
+  const ELEVENLABS_KEY = {elevenlabs_key_json};
+  const VOICE_ID_EN = {voice_id_en_json};
+  const VOICE_ID_HI = {voice_id_hi_json};
 
   let currentMode = INITIAL_MODE;
-  let currentState = 'IDLE'; // 'IDLE' | 'LISTENING' (Green) | 'THINKING' (Violet) | 'SPEAKING' (Cyan)
+  let currentState = 'LOCKED'; // 'LOCKED' (Red) | 'STANDBY' (Amber) | 'ACTIVE' (Cyan) | 'LISTENING' (Green) | 'THINKING' (Violet) | 'SPEAKING' (Cyan)
+  let systemLifecycle = 'LOCKED'; // 'LOCKED' | 'STANDBY' | 'ACTIVE'
+  let currentLang = 'en'; // 'en' | 'hi'
+  let autoListen = false;
+  let inactivityTimer = null;
   let speakingIntensity = 0.0;
   let currentSpokenText = LAST_SPOKEN || "";
 
@@ -708,7 +790,25 @@ NEXUS_SPATIAL_HTML = f"""
       osc.connect(gain);
       gain.connect(ctx.destination);
 
-      if (type === 'wake') {{
+      if (type === 'ignite') {{
+        // Car ignition / system boot chime
+        osc.frequency.setValueAtTime(440, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.10);
+        osc.frequency.exponentialRampToValueAtTime(1320, ctx.currentTime + 0.22);
+        gain.gain.setValueAtTime(0.14, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.25);
+      }} else if (type === 'lock') {{
+        // Power-down / lock chime
+        osc.frequency.setValueAtTime(1040, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(660, ctx.currentTime + 0.10);
+        osc.frequency.exponentialRampToValueAtTime(380, ctx.currentTime + 0.20);
+        gain.gain.setValueAtTime(0.12, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.22);
+      }} else if (type === 'wake') {{
         osc.frequency.setValueAtTime(880, ctx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.12);
         gain.gain.setValueAtTime(0.12, ctx.currentTime);
@@ -805,6 +905,10 @@ NEXUS_SPATIAL_HTML = f"""
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   container.appendChild(renderer.domElement);
 
+  const colorRed1 = new THREE.Color(0xef4444);
+  const colorRed2 = new THREE.Color(0x7f1d1d);
+  const colorAmber1 = new THREE.Color(0xf59e0b);
+  const colorAmber2 = new THREE.Color(0xb45309);
   const colorCyan1 = new THREE.Color(0x00f2fe);
   const colorCyan2 = new THREE.Color(0x38bdf8);
   const colorGreen1 = new THREE.Color(0x00ff88); // Listening: Neon Green
@@ -812,10 +916,10 @@ NEXUS_SPATIAL_HTML = f"""
   const colorViolet1 = new THREE.Color(0xd946ef); // Thinking: Cosmic Violet
   const colorViolet2 = new THREE.Color(0xa855f7);
 
-  let targetColor1 = colorCyan1;
-  let targetColor2 = colorCyan2;
-  let currentColor1 = new THREE.Color(0x00f2fe);
-  let currentColor2 = new THREE.Color(0x38bdf8);
+  let targetColor1 = colorRed1;
+  let targetColor2 = colorRed2;
+  let currentColor1 = new THREE.Color(0xef4444);
+  let currentColor2 = new THREE.Color(0x7f1d1d);
 
   const PARTICLE_COUNT = 2600;
   const geometry = new THREE.BufferGeometry();
@@ -915,34 +1019,55 @@ NEXUS_SPATIAL_HTML = f"""
     const stateLabel = document.getElementById('hud-state-label');
     body.className = '';
 
-    if (newState === 'LISTENING') {{
+    if (newState === 'LOCKED') {{
+      body.classList.add('state-locked');
+      if (stateLabel) stateLabel.textContent = 'LOCKED (RED)';
+      targetColor1 = colorRed1;
+      targetColor2 = colorRed2;
+      coreMat.color.set(0xef4444);
+      ringMat.color.set(0x7f1d1d);
+    }} else if (newState === 'STANDBY') {{
+      body.classList.add('state-standby');
+      if (stateLabel) stateLabel.textContent = 'STANDBY (AMBER)';
+      targetColor1 = colorAmber1;
+      targetColor2 = colorAmber2;
+      coreMat.color.set(0xf59e0b);
+      ringMat.color.set(0xd97706);
+    }} else if (newState === 'ACTIVE') {{
+      body.classList.add('state-active');
+      if (stateLabel) stateLabel.textContent = 'ACTIVE (CYAN)';
+      targetColor1 = colorCyan1;
+      targetColor2 = colorCyan2;
+      coreMat.color.set(0x00f2fe);
+      ringMat.color.set(0x38bdf8);
+    }} else if (newState === 'LISTENING') {{
       body.classList.add('state-listening');
-      stateLabel.textContent = 'LISTENING (GREEN)';
+      if (stateLabel) stateLabel.textContent = 'LISTENING (GREEN)';
       targetColor1 = colorGreen1;
       targetColor2 = colorGreen2;
       coreMat.color.set(0x00ff88);
       ringMat.color.set(0x00ff88);
     }} else if (newState === 'THINKING') {{
       body.classList.add('state-thinking');
-      stateLabel.textContent = 'THINKING (VIOLET)';
+      if (stateLabel) stateLabel.textContent = 'THINKING (VIOLET)';
       targetColor1 = colorViolet1;
       targetColor2 = colorViolet2;
       coreMat.color.set(0xd946ef);
       ringMat.color.set(0xd946ef);
     }} else if (newState === 'SPEAKING') {{
       body.classList.add('state-speaking');
-      stateLabel.textContent = 'SPEAKING (CYAN)';
+      if (stateLabel) stateLabel.textContent = 'SPEAKING (CYAN)';
       targetColor1 = colorCyan1;
       targetColor2 = colorCyan2;
       coreMat.color.set(0x00f2fe);
       ringMat.color.set(0x38bdf8);
     }} else {{
-      body.classList.add('state-idle');
-      stateLabel.textContent = 'STANDBY';
-      targetColor1 = colorCyan1;
-      targetColor2 = colorCyan2;
-      coreMat.color.set(0x00e5ff);
-      ringMat.color.set(0x38bdf8);
+      body.classList.add('state-locked');
+      if (stateLabel) stateLabel.textContent = 'LOCKED';
+      targetColor1 = colorRed1;
+      targetColor2 = colorRed2;
+      coreMat.color.set(0xef4444);
+      ringMat.color.set(0x7f1d1d);
     }}
   }}
 
@@ -1062,7 +1187,54 @@ NEXUS_SPATIAL_HTML = f"""
     loadVoices();
   }}
 
-  function speakOut(text) {{
+  function detectIsHindi(str) {{
+    return /[\u0900-\u097F]/.test(str);
+  }}
+
+  async function speakElevenLabs(text, voiceId) {{
+    if (!ELEVENLABS_KEY || ELEVENLABS_KEY.length < 5) return false;
+    try {{
+      const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${{voiceId}}`, {{
+        method: 'POST',
+        headers: {{
+          'xi-api-key': ELEVENLABS_KEY,
+          'Content-Type': 'application/json',
+          'Accept': 'audio/mpeg'
+        }},
+        body: JSON.stringify({{
+          text: text,
+          model_id: 'eleven_multilingual_v2',
+          voice_settings: {{ stability: 0.5, similarity_boost: 0.82 }}
+        }})
+      }});
+      if (!response.ok) return false;
+      const blob = await response.blob();
+      const audioUrl = URL.createObjectURL(blob);
+      const audio = new Audio(audioUrl);
+
+      setJarvisState('SPEAKING');
+      speakingIntensity = 1.0;
+
+      return new Promise((resolve) => {{
+        audio.onended = () => {{
+          speakingIntensity = 0.0;
+          setJarvisState(systemLifecycle);
+          resolve(true);
+        }};
+        audio.onerror = () => {{
+          speakingIntensity = 0.0;
+          setJarvisState(systemLifecycle);
+          resolve(false);
+        }};
+        audio.play().catch(() => resolve(false));
+      }});
+    }} catch(e) {{
+      console.warn("ElevenLabs TTS notice:", e);
+      return false;
+    }}
+  }}
+
+  async function speakOut(text) {{
     if (!text || !text.trim()) return;
     currentSpokenText = text;
 
@@ -1070,11 +1242,17 @@ NEXUS_SPATIAL_HTML = f"""
 
     const subBar = document.getElementById('subtitle-bar');
     const subText = document.getElementById('subtitle-text');
-    subText.textContent = text;
-    subBar.style.display = 'block';
+    if (subText) subText.textContent = text;
+    if (subBar) subBar.style.display = 'block';
 
-    playSciFiBeep('wake');
+    const isHi = detectIsHindi(text) || (currentLang === 'hi');
+    const targetVoiceId = isHi ? VOICE_ID_HI : VOICE_ID_EN;
 
+    // 1. Try ElevenLabs Realistic Voice (Viraj for EN / Bunty for HI)
+    const elevenOk = await speakElevenLabs(text, targetVoiceId);
+    if (elevenOk) return;
+
+    // 2. Fallback to Browser SpeechSynthesis with high-quality regional voices
     if ('speechSynthesis' in window) {{
       try {{
         window.speechSynthesis.cancel();
@@ -1084,20 +1262,27 @@ NEXUS_SPATIAL_HTML = f"""
 
         const utter = new SpeechSynthesisUtterance(text);
         utter.rate = 1.02;
-        utter.pitch = 0.98;
+        utter.pitch = 1.0;
         utter.volume = 1.0;
-        utter.lang = 'en-US';
 
         if (!voicesList || voicesList.length === 0) {{
           loadVoices();
         }}
-        const naturalVoice = voicesList.find(v => 
-          v.lang.startsWith('en') && (
-            v.name.includes('Natural') || v.name.includes('Google') || 
-            v.name.includes('Guy') || v.name.includes('David') || v.name.includes('Ryan')
-          )
-        );
-        if (naturalVoice) utter.voice = naturalVoice;
+
+        if (isHi) {{
+          utter.lang = 'hi-IN';
+          const hiVoice = voicesList.find(v => v.lang.startsWith('hi'));
+          if (hiVoice) utter.voice = hiVoice;
+        }} else {{
+          utter.lang = 'en-IN';
+          const enVoice = voicesList.find(v => 
+            v.lang.startsWith('en') && (
+              v.name.includes('India') || v.name.includes('Natural') || 
+              v.name.includes('Guy') || v.name.includes('David') || v.name.includes('Ryan')
+            )
+          );
+          if (enVoice) utter.voice = enVoice;
+        }}
 
         utter.onstart = () => {{
           speakingIntensity = 1.0;
@@ -1105,19 +1290,19 @@ NEXUS_SPATIAL_HTML = f"""
         }};
         utter.onend = () => {{
           speakingIntensity = 0.0;
-          setJarvisState('IDLE');
+          setJarvisState(systemLifecycle);
         }};
         utter.onerror = (e) => {{
           console.warn("Speech error, resetting state:", e);
           speakingIntensity = 0.0;
-          setJarvisState('IDLE');
+          setJarvisState(systemLifecycle);
         }};
 
         window.speechSynthesis.speak(utter);
       }} catch(err) {{
         console.error("SpeechSynthesis error:", err);
         speakingIntensity = 0.0;
-        setJarvisState('IDLE');
+        setJarvisState(systemLifecycle);
       }}
     }}
   }}
@@ -1130,7 +1315,10 @@ NEXUS_SPATIAL_HTML = f"""
 
   function testJarvisVoice() {{
     getAudioContext();
-    speakOut("Jarvis audio systems fully operational, Nakul. I am ready.");
+    const testMsg = (currentLang === 'hi')
+      ? "जार्विस ऑडियो सिस्टम पूरी तरह से चालू है। मैं तैयार हूँ, नकुल जी।"
+      : "Jarvis audio systems fully operational, Nakul. Systems ready.";
+    speakOut(testMsg);
   }}
 
   // ---------------- DIRECT ZERO-LATENCY GEMINI REASONING BRIDGE ----------------
@@ -1171,17 +1359,22 @@ NEXUS_SPATIAL_HTML = f"""
     try {{
       const apiKey = (GEMINI_KEY && GEMINI_KEY.length > 5) ? GEMINI_KEY : atob("QVEuQWI4Uk42TGl6N0pCWGw2WDYyYlJsTkZnQlFmVlFoaFNEZkFPTGhiZDZXZm9GWGlrNEE=");
       if (!apiKey) {{
-        const msg = "I heard you, Nakul, but I need your Gemini API key configured to respond.";
+        const msg = (currentLang === 'hi')
+          ? "नकुल जी, प्रतिक्रिया देने के लिए आपकी जेमिनी एपीआई कुंजी आवश्यक है।"
+          : "I heard you, Nakul, but I need your Gemini API key configured to respond.";
         addMessageToBox('assistant', msg);
         speakOut(msg);
         return;
       }}
 
       const sysInstruction = (
-        "You are Jarvis 2.0, Nakul's brilliant, witty AI companion and Spatial Voice OS. " +
-        "Nakul is studying B.Tech Data Science at UPES Dehradun. " +
-        "Converse in natural, spoken English (1 to 3 short sentences, British charm). " +
-        "Never use markdown formatting, asterisks, or bullet points in your reply so it sounds completely natural when spoken aloud."
+        "You are Jarvis 2.0, Nakul's brilliant, loyal, and witty AI companion and Spatial Voice OS. " +
+        "Nakul is studying B.Tech Data Science at UPES Dehradun.\n" +
+        "Language Guidelines:\n" +
+        "- If Nakul speaks or asks in Hindi or Hinglish, reply in warm, natural, conversational Hindi (in clean spoken phrasing).\n" +
+        "- If Nakul speaks in English, reply in natural spoken English with British charm.\n" +
+        "- Keep your responses conversational, concise, and punchy (1 to 3 spoken sentences).\n" +
+        "- Never use markdown formatting, asterisks, hash signs, or bullet points so it sounds completely natural when spoken aloud."
       );
 
       const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${{apiKey}}`;
@@ -1214,7 +1407,7 @@ NEXUS_SPATIAL_HTML = f"""
       }}
 
       const data = await response.json();
-      let replyText = "I processed your request, Nakul.";
+      let replyText = (currentLang === 'hi') ? "मैंने आपका अनुरोध प्रोसेस कर लिया है, नकुल जी।" : "I processed your request, Nakul.";
       if (data && data.candidates && data.candidates[0] && data.candidates[0].content) {{
         replyText = data.candidates[0].content.parts[0].text;
       }}
@@ -1226,16 +1419,128 @@ NEXUS_SPATIAL_HTML = f"""
       speakOut(replyText); // Speaks in ELECTRIC CYAN!
     }} catch (error) {{
       console.warn("Direct Gemini call fallback:", error);
-      const fallbackReply = "I heard your request: " + userQuery + ". All systems nominal.";
+      const fallbackReply = (currentLang === 'hi')
+        ? "मैंने आपका अनुरोध सुना: " + userQuery + "। सभी सिस्टम सामान्य हैं।"
+        : "I heard your request: " + userQuery + ". All systems nominal.";
       addMessageToBox('assistant', fallbackReply);
       speakOut(fallbackReply);
     }}
   }}
 
-  // ---------------- ALWAYS-ON BROWSER SPEECH RECOGNITION ----------------
+  // ---------------- CAR-KEY IGNITION & LIFECYCLE CONTROLLER ----------------
   let recognition = null;
-  let autoListen = true;
 
+  function updateLifecycleUI() {{
+    const ignitionBtn = document.getElementById('ignition-btn');
+    const statusText = document.getElementById('ignition-status-text');
+    const badgePrefix = document.getElementById('status-badge-prefix');
+    const subtitleText = document.getElementById('subtitle-text');
+
+    if (systemLifecycle === 'LOCKED') {{
+      setJarvisState('LOCKED');
+      if (ignitionBtn) {{
+        ignitionBtn.classList.remove('ignited');
+        ignitionBtn.style.borderColor = 'rgba(239, 68, 68, 0.6)';
+        ignitionBtn.style.color = '#f87171';
+      }}
+      if (statusText) statusText.textContent = '[LOCKED]';
+      if (badgePrefix) badgePrefix.textContent = '🔒 LOCKED';
+      if (subtitleText) subtitleText.textContent = (currentLang === 'hi')
+        ? 'जार्विस लॉक है। स्टैंडबाय शुरू करने के लिए Ctrl+Alt+J दबाएँ।'
+        : 'Jarvis is in locked mode. Press Ctrl+Alt+J or click the Ignition key to start standby.';
+    }} else if (systemLifecycle === 'STANDBY') {{
+      setJarvisState('STANDBY');
+      if (ignitionBtn) {{
+        ignitionBtn.classList.add('ignited');
+        ignitionBtn.style.borderColor = 'rgba(245, 158, 11, 0.7)';
+        ignitionBtn.style.color = '#fbbf24';
+      }}
+      if (statusText) statusText.textContent = '[STANDBY]';
+      if (badgePrefix) badgePrefix.textContent = '🟡 STANDBY';
+      if (subtitleText) subtitleText.textContent = (currentLang === 'hi')
+        ? "जार्विस स्टैंडबाय पर है। एक्टिवेट करने के लिए 'हे जार्विस' कहें।"
+        : "Jarvis in Standby. Say 'Hey Jarvis' to activate systems.";
+    }} else if (systemLifecycle === 'ACTIVE') {{
+      setJarvisState('ACTIVE');
+      if (ignitionBtn) {{
+        ignitionBtn.classList.add('ignited');
+        ignitionBtn.style.borderColor = 'rgba(0, 255, 136, 0.7)';
+        ignitionBtn.style.color = '#00ff88';
+      }}
+      if (statusText) statusText.textContent = '[ONLINE]';
+      if (badgePrefix) badgePrefix.textContent = '🟢 ACTIVE';
+      if (subtitleText) subtitleText.textContent = (currentLang === 'hi')
+        ? "जार्विस सक्रिय है। 'जार्विस [कमांड]' कहें।"
+        : "Jarvis Active. Say 'Jarvis [command]' to dispatch directives.";
+    }}
+  }}
+
+  function resetInactivityTimer() {{
+    if (inactivityTimer) clearTimeout(inactivityTimer);
+    inactivityTimer = setTimeout(() => {{
+      if (systemLifecycle === 'ACTIVE') {{
+        console.log("[Auto-Standby] Inactivity timeout reached (60s). Returning to STANDBY.");
+        systemLifecycle = 'STANDBY';
+        playSciFiBeep('lock');
+        updateLifecycleUI();
+        const msg = (currentLang === 'hi')
+          ? "निष्क्रियता के कारण जार्विस स्टैंडबाय मोड में चला गया है।"
+          : "Jarvis entering standby mode due to inactivity. Say 'Hey Jarvis' to wake.";
+        addMessageToBox('assistant', msg);
+        speakOut(msg);
+      }}
+    }}, 60000);
+  }}
+
+  function toggleIgnition() {{
+    getAudioContext();
+    if (systemLifecycle === 'LOCKED') {{
+      systemLifecycle = 'STANDBY';
+      autoListen = true;
+      playSciFiBeep('ignite');
+      updateLifecycleUI();
+      if (!recognition) initWebSpeech();
+      try {{ recognition.start(); }} catch(e) {{}}
+      const igniteMsg = (currentLang === 'hi')
+        ? "सिस्टम चालू हो गया है। जार्विस स्टैंडबाय मोड में है। एक्टिवेट करने के लिए कहिए 'हे जार्विस'।"
+        : "Ignition confirmed. Jarvis in standby mode. Say 'Hey Jarvis' to activate systems.";
+      addMessageToBox('assistant', igniteMsg);
+      speakOut(igniteMsg);
+    }} else {{
+      systemLifecycle = 'LOCKED';
+      autoListen = false;
+      playSciFiBeep('lock');
+      updateLifecycleUI();
+      if (inactivityTimer) clearTimeout(inactivityTimer);
+      if (recognition) try {{ recognition.stop(); }} catch(e) {{}}
+      const lockMsg = (currentLang === 'hi')
+        ? "जार्विस लॉक हो गया है। फिर से शुरू करने के लिए Ctrl+Alt+J दबाएँ।"
+        : "Jarvis locked down. Press Ctrl+Alt+J to reignite.";
+      addMessageToBox('assistant', lockMsg);
+      speakOut(lockMsg);
+    }}
+  }}
+
+  function toggleLanguage() {{
+    currentLang = (currentLang === 'en') ? 'hi' : 'en';
+    const langLabel = document.getElementById('lang-label');
+    if (langLabel) {{
+      langLabel.textContent = (currentLang === 'hi') ? 'हिन्दी' : 'ENGLISH';
+    }}
+    if (recognition) {{
+      try {{ recognition.stop(); }} catch(e) {{}}
+      recognition.lang = (currentLang === 'hi') ? 'hi-IN' : 'en-IN';
+      if (systemLifecycle !== 'LOCKED' && autoListen) {{
+        try {{ recognition.start(); }} catch(e) {{}}
+      }}
+    }}
+    playSciFiBeep('think');
+    const msg = (currentLang === 'hi') ? "हिन्दी भाषा सक्रिय की गई है।" : "English language active.";
+    addMessageToBox('assistant', msg);
+    speakOut(msg);
+  }}
+
+  // ---------------- STRICT TWO-TIER WEB SPEECH ENGINE ----------------
   function initWebSpeech() {{
     const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRec) {{
@@ -1246,81 +1551,187 @@ NEXUS_SPATIAL_HTML = f"""
     recognition = new SpeechRec();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = 'en-IN';
+    recognition.lang = (currentLang === 'hi') ? 'hi-IN' : 'en-IN';
 
     recognition.onaudiostart = () => {{
       getAudioContext();
-      setJarvisState('LISTENING'); // Turns NEON GREEN when user starts talking
+      if (systemLifecycle === 'ACTIVE') {{
+        setJarvisState('LISTENING');
+      }}
     }};
 
     recognition.onspeechstart = () => {{
-      setJarvisState('LISTENING');
+      if (systemLifecycle === 'ACTIVE') {{
+        setJarvisState('LISTENING');
+      }}
     }};
 
     recognition.onspeechend = () => {{
-      setJarvisState('THINKING'); // Turns COSMIC VIOLET when user pauses
+      if (systemLifecycle === 'ACTIVE') {{
+        setJarvisState('THINKING');
+      }}
     }};
 
     recognition.onresult = (event) => {{
+      if (systemLifecycle === 'LOCKED') return;
+
       const latest = event.results[event.results.length - 1];
       const transcript = latest[0].transcript.trim();
       const lower = transcript.toLowerCase();
 
       if (!latest.isFinal) {{
-        setJarvisState('LISTENING');
+        if (systemLifecycle === 'ACTIVE') {{
+          setJarvisState('LISTENING');
+        }}
         return;
       }}
 
-      // Check wake phrases or direct voice query
-      const triggers = ['hey jarvis', 'jarvis', 'hey jervis', 'jervis', 'hey nexus', 'nexus'];
-      let matchedQuery = "";
-      for (const trig of triggers) {{
-        const idx = lower.indexOf(trig);
-        if (idx !== -1) {{
-          matchedQuery = transcript.slice(idx + trig.length).trim();
-          break;
+      console.log(`[Jarvis Heard in ${{systemLifecycle}}]:`, transcript);
+
+      // --- TIER 1: STANDBY MODE (STRICT IGNITION ONLY) ---
+      if (systemLifecycle === 'STANDBY') {{
+        const ignitionPatterns = [
+          'hey jarvis', 'hey jervis', 'hi jarvis', 'hello jarvis',
+          'ok jarvis', 'okay jarvis', 'wake up jarvis', 'start jarvis',
+          'हे जार्विस', 'हे जर्विस', 'नमस्ते जार्विस', 'जार्विस शुरू करो', 'सुनो जार्विस'
+        ];
+
+        let matchedIgnition = false;
+        let commandAfterWake = "";
+
+        for (const p of ignitionPatterns) {{
+          const idx = lower.indexOf(p);
+          if (idx !== -1) {{
+            matchedIgnition = true;
+            commandAfterWake = transcript.slice(idx + p.length).trim();
+            break;
+          }}
         }}
+
+        // STRICT REJECT: Discard anything that is not 'Hey Jarvis' in Standby
+        if (!matchedIgnition) {{
+          console.log("[Standby Ignored]:", transcript);
+          setJarvisState('STANDBY');
+          return;
+        }}
+
+        // 'Hey Jarvis' Validated! Ignite systems!
+        systemLifecycle = 'ACTIVE';
+        playSciFiBeep('wake');
+        updateLifecycleUI();
+        resetInactivityTimer();
+
+        if (commandAfterWake.length > 1) {{
+          processVoiceQuery(commandAfterWake);
+        }} else {{
+          const wakeReply = (currentLang === 'hi' || detectIsHindi(transcript))
+            ? "जार्विस ऑनलाइन है, बताइए नकुल जी मैं आपकी क्या मदद करूँ?"
+            : "Jarvis is online and ready. What can I do for you, Nakul?";
+          addMessageToBox('assistant', wakeReply);
+          speakOut(wakeReply);
+        }}
+        return;
       }}
 
-      // If no prefix but active dialogue, use full transcript
-      if (!matchedQuery && transcript.length > 2) {{
-        matchedQuery = transcript;
-      }}
+      // --- TIER 2: ACTIVE MODE ---
+      if (systemLifecycle === 'ACTIVE') {{
+        resetInactivityTimer();
 
-      if (matchedQuery) {{
-        processVoiceQuery(matchedQuery);
-      }} else {{
-        setJarvisState('IDLE');
+        // 1. Check standby/sleep commands
+        const standbyTriggers = [
+          'standby', 'go to sleep', 'sleep', 'stop listening', 'stand by',
+          'स्टैंडबाय', 'सो जाओ', 'शांत रहो'
+        ];
+        for (const s of standbyTriggers) {{
+          if (lower.includes(s)) {{
+            systemLifecycle = 'STANDBY';
+            playSciFiBeep('lock');
+            updateLifecycleUI();
+            const reply = (currentLang === 'hi')
+              ? "स्टैंडबाय मोड में जा रहा हूँ। जब भी आवश्यकता हो, 'हे जार्विस' कहें।"
+              : "Returning to standby mode. Say 'Hey Jarvis' whenever you need me.";
+            addMessageToBox('assistant', reply);
+            speakOut(reply);
+            return;
+          }}
+        }}
+
+        // 2. Extract command with prefix 'jarvis', 'hey jarvis', etc.
+        const prefixes = ['hey jarvis', 'jarvis', 'hey jervis', 'jervis', 'हे जार्विस', 'जार्विस'];
+        let matchedQuery = "";
+        for (const trig of prefixes) {{
+          const idx = lower.indexOf(trig);
+          if (idx !== -1) {{
+            matchedQuery = transcript.slice(idx + trig.length).trim();
+            break;
+          }}
+        }}
+
+        // 3. Substantive query fallback (guards against random room murmurs)
+        if (!matchedQuery) {{
+          if (transcript.split(' ').length < 2 && transcript.length < 5) {{
+            console.log("[Active Ignored brief murmur]:", transcript);
+            setJarvisState('ACTIVE');
+            return;
+          }}
+          matchedQuery = transcript;
+        }}
+
+        if (matchedQuery && matchedQuery.length > 1) {{
+          processVoiceQuery(matchedQuery);
+        }} else {{
+          setJarvisState('ACTIVE');
+        }}
       }}
     }};
 
     recognition.onend = () => {{
-      if (autoListen) {{
+      if (systemLifecycle !== 'LOCKED' && autoListen) {{
         try {{ recognition.start(); }} catch(e) {{}}
       }}
     }};
-
-    try {{
-      recognition.start();
-      document.getElementById('mic-btn').classList.add('listening');
-    }} catch(e) {{}}
   }}
 
-  function toggleBrowserVoice() {{
-    const btn = document.getElementById('mic-btn');
-    autoListen = !autoListen;
-    getAudioContext();
-    if (autoListen) {{
-      btn.textContent = '🎙️ AUTO-LISTEN: ON';
-      btn.classList.add('listening');
-      if (recognition) try {{ recognition.start(); }} catch(e) {{}}
-    }} else {{
-      btn.textContent = '🎙️ AUTO-LISTEN: OFF';
-      btn.classList.remove('listening');
-      if (recognition) try {{ recognition.stop(); }} catch(e) {{}}
-      setJarvisState('IDLE');
+  // ---------------- POWER MANAGEMENT & GLOBAL SHORTCUT ----------------
+  // 1. Sleep / Hibernate / Screen Suspend Detection
+  let lastHeartbeat = Date.now();
+  setInterval(() => {{
+    const now = Date.now();
+    if (now - lastHeartbeat > 3500) {{
+      console.log("[Power] Sleep/Hibernate detected. Resetting to LOCKED.");
+      if (systemLifecycle !== 'LOCKED') {{
+        systemLifecycle = 'LOCKED';
+        autoListen = false;
+        if (recognition) try {{ recognition.stop(); }} catch(e) {{}}
+        if (inactivityTimer) clearTimeout(inactivityTimer);
+        updateLifecycleUI();
+        setJarvisState('LOCKED');
+      }}
+    }}
+    lastHeartbeat = now;
+  }}, 1000);
+
+  // 2. Tab Hidden / Minimized Detection
+  document.addEventListener('visibilitychange', () => {{
+    if (document.hidden) {{
+      if (systemLifecycle === 'ACTIVE') {{
+        systemLifecycle = 'STANDBY';
+        updateLifecycleUI();
+      }}
+    }}
+  }});
+
+  // 3. Global Shortcut Ctrl + Alt + J Listener
+  function handleHotkey(e) {{
+    if ((e.ctrlKey || e.metaKey) && e.altKey && (e.key === 'j' || e.key === 'J' || e.code === 'KeyJ')) {{
+      e.preventDefault();
+      toggleIgnition();
     }}
   }}
+  window.addEventListener('keydown', handleHotkey, true);
+  try {{
+    window.parent.addEventListener('keydown', handleHotkey, true);
+  }} catch(e) {{}}
 
   // Unlock Audio on First Click Anywhere on Stage
   document.addEventListener('click', () => {{
@@ -1330,7 +1741,8 @@ NEXUS_SPATIAL_HTML = f"""
     }}
   }}, {{ once: true }});
 
-  initWebSpeech();
+  // Initialize UI in initial LOCKED mode
+  updateLifecycleUI();
 </script>
 </body>
 </html>

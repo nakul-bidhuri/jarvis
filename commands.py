@@ -590,6 +590,11 @@ def process_with_gemini(user_text: str) -> tuple[str, bool]:
         "   - You have complete access to the user's laptop: taking screenshots ('take_screenshot'), reading clipboard ('read_clipboard'), opening VS Code ('open_code_editor'), searching files ('search_files_on_laptop'), opening folders/files ('open_file_or_folder'), reading files ('read_file_content'), writing files ('write_file_on_laptop'), and running tools.\n"
         "   - PERMISSION REQUIREMENTS: For high-impact or destructive actions (such as deleting files, emptying the Recycle Bin, or killing processes), you MUST ask for Nakul's explicit permission before executing!\n"
         "10. Background Standby: When Nakul tells you to stop, rest, sleep, or says goodbye, call 'shutdown_jarvis', which puts you into quiet background standby ready to wake upon 'Hey Jarvis'!\n"
+        "11. Bilingual Fluency (English & Hindi):\n"
+        "   - Nakul can speak to you in English, Hindi, or Hinglish.\n"
+        "   - If Nakul speaks or asks in Hindi or Hinglish, respond in natural, warm, conversational Hindi (in Devanagari or clean natural phrasing).\n"
+        "   - If Nakul speaks in English, respond in English with British charm.\n"
+        "   - Keep spoken answers concise, human, and direct (1 to 3 spoken sentences) without any markdown formatting, asterisks, or bullet points.\n"
     )
 
     last_err = None
@@ -659,14 +664,17 @@ def handle_command(text: str) -> tuple[str, bool | str]:
         elif any(w in clean for w in ("no", "cancel", "dont", "do not", "abort", "stop", "never")):
             return safe_messaging.cancel_staged_message(), "sleep"
 
-    # Natural activation greetings (Siri / Alexa style)
+    # Natural activation greetings (Siri / Alexa / Nexus style)
     if not clean or clean in (
         "jarvis", "hey jarvis", "jervis", "hey jervis",
         "to start", "start", "start jarvis", "start jervis",
         "wake up", "wake up jarvis", "wake up jervis",
-        "turn on", "are you there", "are you online"
+        "turn on", "are you there", "are you online",
+        "हे जार्विस", "जार्विस", "नमस्ते जार्विस", "शुरू करो"
     ):
         audio_cues.play("wake")
+        if any('\u0900' <= c <= '\u097f' for c in text):
+            return "हाँ नकुल जी, मैं ऑनलाइन हूँ। बताइए मैं आपकी क्या सहायता करूँ?", "sleep"
         return "Yes, Nakul? I am online and listening.", "sleep"
 
     # Executive Daily Briefing (Nexus / Tony Stark style)
