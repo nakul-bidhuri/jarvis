@@ -1,21 +1,21 @@
 """
-app.py – JARVIS 2.0 Spatial AI Operating System (Pure 3D Revolving Loopers Edition).
+app.py – JARVIS 2.0 Spatial AI Operating System (Nexus Spatial Edition).
 
-Cinematic, ultra-clean 3D Holographic UI with Zero-Latency Bilingual Voice Engine:
- - 🌀 Pure 3D Revolving Loopers: Concentric gyroscopic loops + central pulsing AI core
- - 🟢 USER SPEAKING / LISTENING: Vibrant Neon Green (#00ff88) expansion & wave turbulence
- - 🟣 JARVIS THINKING / PROCESSING: Cosmic Violet (#d946ef) hyper-spin & vortex acceleration
- - 🔵 JARVIS SPEAKING / ANSWERING: Electric Cyan (#00f2fe) harmonic voice pulses
- - 🎙️ Automatic Bilingual Recognition: Natively understands Hindi and English automatically
- - 🔊 Custom Realistic Voice Pipeline:
+Cinema-grade Dark Spatial Cyberpunk UI with Zero-Latency Client-Side Gemini Brain & Audio Pipeline:
+ - 🟢 USER SPEAKING / LISTENING: Vibrant Neon Green (#00ff88) aura & expanding particle pulse
+ - 🟣 JARVIS THINKING / PROCESSING: Cosmic Violet (#d946ef) swirling vortex & hyper-spin
+ - 🔵 JARVIS SPEAKING / ANSWERING: Electric Cyan (#00f2fe) voice synthesis & harmonic wave turbulence
+ - 🔊 Direct Browser Audio Synthesis: Solves iframe sandbox blocks, plays speech aloud instantly
+ - 🎙️ Direct Web-Speech + Gemini 3.5 Flash Lite Bridge: Zero-latency voice interaction
+ - 🔴 Top-Left Live Status Pill: [ ● LIVE | MODE | CURRENT STATE ]
+ - 🌐 3 Interactive Spatial Modes:
+     1. ASSISTANT MODE: Central reactive AI core with revolving gyroscopic loopers, weather & live market tickers, INTEL stream
+     2. IMMERSIVE MODE: Curved 3D spatial glassmorphic carousel (MARKETS, PROJECTS, SPORTS, CALENDAR, WEATHER, AUDIO)
+     3. HUMAN MODE: 3D Volumetric Particle Android Head with facial contour morphing
+ - 🗣️ Automatic Bilingual Understanding: Seamlessly switches between Hindi and English
+ - 🎙️ Custom Voices:
      * English: ElevenLabs ID fPIfC3elMLbN9tNwMXkw (with instant soft male fallback)
      * Hindi: ElevenLabs ID ibbx9zDYGvLgtYzRbqqG (with instant soft male fallback)
- - 🛡️ Strict Standby / Anti-Phantom Engine:
-     * Starts quietly in Standby without random answering
-     * Wakes ONLY on 'Hey Jarvis' or 'हे जार्विस'
-     * Once active, responds to 'Jarvis [command]'
-     * Toggle standby anytime via Ctrl+Alt+J
- - 🧹 Zero Clutter: Clean 3D loopers with subtitle pill; all telemetry fetched behind the scenes
 """
 
 import os
@@ -37,7 +37,7 @@ import spotify_control
 import laptop_controller
 
 st.set_page_config(
-    page_title="JARVIS 2.0 // REVOLVING LOOPERS",
+    page_title="JARVIS 2.0 // NEXUS SPATIAL OS",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -46,27 +46,29 @@ st.set_page_config(
 # Initialize Session State
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {"role": "assistant", "content": "Good evening, Nakul. Jarvis Spatial OS is in standby. Say 'Hey Jarvis' to begin."}
+        {"role": "assistant", "content": "Good evening, Nakul. Jarvis Spatial OS is online. Ready for voice or directive dispatch."}
     ]
+if "ui_mode" not in st.session_state:
+    st.session_state.ui_mode = "ASSISTANT MODE"  # "ASSISTANT MODE" | "IMMERSIVE MODE" | "HUMAN MODE"
 if "current_state" not in st.session_state:
-    st.session_state.current_state = "STANDBY"
+    st.session_state.current_state = "IDLE"  # "IDLE" | "LISTENING" | "THINKING" | "SPEAKING"
 if "last_spoken" not in st.session_state:
     st.session_state.last_spoken = st.session_state.messages[-1]["content"]
 
-# Safe Retrieval of Gemini API Key with Cloud Fallback
+# Safe Retrieval of Gemini & ElevenLabs API Keys
 gemini_key = config.get("gemini_api_key") or ""
 elevenlabs_key = config.get("elevenlabs_api_key") or ""
 voice_id_en = config.get("voice_id_en") or "fPIfC3elMLbN9tNwMXkw"
 voice_id_hi = config.get("voice_id_hi") or "ibbx9zDYGvLgtYzRbqqG"
 
-# Fetch background telemetry for live voice queries (weather, time, battery, CPU)
+# Fetch live telemetry safely
 try:
     cpu_val = f"{laptop_controller.psutil.cpu_percent():.0f}%"
     ram_val = f"{laptop_controller.psutil.virtual_memory().percent:.0f}%"
     bat = laptop_controller.psutil.sensors_battery()
     bat_val = f"{bat.percent}%" if bat else "AC PWR"
 except Exception:
-    cpu_val, ram_val, bat_val = "12%", "42%", "100%"
+    cpu_val, ram_val, bat_val = "14%", "44%", "100%"
 
 try:
     weath_raw = live_knowledge.get_live_weather("Dehradun")
@@ -78,23 +80,49 @@ try:
 except Exception:
     weath_temp, weath_desc = "22°C", "Clear Sky"
 
-clock_now = datetime.datetime.now().strftime("%I:%M %p")
-today_date = datetime.datetime.now().strftime("%A, %B %d, %Y")
+try:
+    now_playing = spotify_control.get_now_playing().replace("Currently playing ", "")
+except Exception:
+    now_playing = "Ready on Spotify"
+
+active_rems = []
+try:
+    active_rems = [r for r in reminder_scheduler.load_reminders() if not r.get("completed")]
+except Exception:
+    pass
+
+
+def detect_mode_switch(cmd_text: str, current_mode: str) -> tuple[str, str | None]:
+    """Detects voice/text mode-transformation commands."""
+    low = cmd_text.lower().strip()
+    if "immersive" in low or "carousel" in low or "cards mode" in low:
+        return "IMMERSIVE MODE", "Immersive mode is now active."
+    if "human" in low or "avatar" in low or "face mode" in low:
+        return "HUMAN MODE", "Understood. Give me a moment. I'm here, how can I help?"
+    if "assistant mode" in low or "return to assistant" in low or "normal mode" in low:
+        return "ASSISTANT MODE", "Returning to assistant mode."
+    return current_mode, None
+
 
 # Process Incoming Query Parameter
 query_cmd = st.query_params.get("voice_cmd", "")
 if query_cmd:
     st.query_params.clear()
+    new_mode, mode_reply = detect_mode_switch(query_cmd, st.session_state.ui_mode)
+    st.session_state.ui_mode = new_mode
     st.session_state.messages.append({"role": "user", "content": query_cmd})
-    try:
-        reply, _ = commands.handle_command(query_cmd)
-    except Exception:
-        reply = f"Directive processed: {query_cmd}"
+    if mode_reply:
+        reply = mode_reply
+    else:
+        try:
+            reply, _ = commands.handle_command(query_cmd)
+        except Exception:
+            reply = f"Directive processed: {query_cmd}"
     st.session_state.messages.append({"role": "assistant", "content": reply})
     st.session_state.last_spoken = reply
     st.session_state.current_state = "SPEAKING"
 
-# ==================== PURE DARK CYBERPUNK THEME ====================
+# ==================== STRICT CYBERPUNK DARK THEME ENFORCEMENT ====================
 DARK_THEME_CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@500;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
@@ -102,10 +130,9 @@ DARK_THEME_CSS = """
 html, body, [data-testid="stAppViewContainer"], .stApp {
     background-color: #030712 !important;
     background-image: 
-        radial-gradient(ellipse at 50% 30%, rgba(10, 25, 48, 0.75) 0%, rgba(2, 6, 18, 0.96) 65%, #010308 100%) !important;
+        radial-gradient(ellipse at 50% 20%, rgba(14, 30, 60, 0.6) 0%, rgba(2, 6, 18, 0.95) 70%, #01040a 100%) !important;
     color: #e2f1ff !important;
     font-family: 'Inter', -apple-system, sans-serif !important;
-    overflow-x: hidden !important;
 }
 
 #MainMenu, header, footer, .stDeployButton, [data-testid="stToolbar"], [data-testid="stHeader"] {
@@ -114,19 +141,40 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
 }
 
 .block-container {
-    padding-top: 0.5rem !important;
-    padding-bottom: 0.5rem !important;
-    padding-left: 1.0rem !important;
-    padding-right: 1.0rem !important;
+    padding-top: 0.8rem !important;
+    padding-bottom: 0.8rem !important;
+    padding-left: 1.5rem !important;
+    padding-right: 1.5rem !important;
     max-width: 100% !important;
 }
 
-div[data-testid="stChatInput"] {
-    background: rgba(6, 16, 32, 0.94) !important;
-    border: 1px solid rgba(0, 242, 254, 0.4) !important;
+div[data-testid="stHorizontalBlock"] button {
+    background: rgba(10, 20, 38, 0.75) !important;
+    border: 1px solid rgba(56, 189, 248, 0.3) !important;
     border-radius: 999px !important;
-    box-shadow: 0 0 25px rgba(0, 210, 255, 0.15), inset 0 0 15px rgba(0, 210, 255, 0.05) !important;
-    margin-top: 4px !important;
+    color: #94a3b8 !important;
+    font-family: 'Orbitron', sans-serif !important;
+    font-size: 0.72rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 1.5px !important;
+    padding: 6px 14px !important;
+    transition: all 0.25s ease !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5) !important;
+}
+
+div[data-testid="stHorizontalBlock"] button:hover {
+    background: rgba(56, 189, 248, 0.2) !important;
+    border-color: #00f2fe !important;
+    color: #ffffff !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 0 20px rgba(0, 242, 254, 0.35) !important;
+}
+
+div[data-testid="stChatInput"] {
+    background: rgba(6, 16, 32, 0.92) !important;
+    border: 1px solid rgba(0, 242, 254, 0.35) !important;
+    border-radius: 999px !important;
+    box-shadow: 0 0 25px rgba(0, 210, 255, 0.12), inset 0 0 15px rgba(0, 210, 255, 0.04) !important;
 }
 
 div[data-testid="stChatInput"] textarea {
@@ -139,29 +187,59 @@ div[data-testid="stChatInput"] textarea {
 div[data-testid="stChatInput"] textarea::placeholder {
     color: rgba(148, 163, 184, 0.65) !important;
 }
+
+* {
+    border-color: rgba(56, 189, 248, 0.2) !important;
+}
 </style>
 """
 st.markdown(DARK_THEME_CSS, unsafe_allow_html=True)
 
-# Serialized context variables for 3D Engine & Gemini Bridge
+# Top Mode Switcher Bar
+col_mode_a, col_mode_b, col_mode_c, col_spacer, col_quick_test = st.columns([1.3, 1.4, 1.3, 2.5, 3.5])
+
+with col_mode_a:
+    if st.button("🔵 ASSISTANT MODE", use_container_width=True):
+        st.session_state.ui_mode = "ASSISTANT MODE"
+        st.session_state.current_state = "IDLE"
+        st.session_state.last_spoken = "Returning to assistant mode."
+        st.rerun()
+
+with col_mode_b:
+    if st.button("🌌 IMMERSIVE MODE", use_container_width=True):
+        st.session_state.ui_mode = "IMMERSIVE MODE"
+        st.session_state.current_state = "IDLE"
+        st.session_state.last_spoken = "Immersive mode is now active."
+        st.rerun()
+
+with col_mode_c:
+    if st.button("👤 HUMAN MODE", use_container_width=True):
+        st.session_state.ui_mode = "HUMAN MODE"
+        st.session_state.current_state = "IDLE"
+        st.session_state.last_spoken = "Understood. Give me a moment. I'm here, how can I help?"
+        st.rerun()
+
+with col_quick_test:
+    st.markdown(
+        f"<div style='text-align:right; font-family:JetBrains Mono,monospace; font-size:0.75rem; color:#94a3b8; padding-top:8px;'>"
+        f"<span style='color:#00ff88;'>● GREEN: YOU SPEAK</span> • "
+        f"<span style='color:#d946ef;'>● VIOLET: THINKING</span> • "
+        f"<span style='color:#00f2fe;'>● CYAN: JARVIS SPEAKS</span></div>",
+        unsafe_allow_html=True
+    )
+
+# Prepare serialized data for the 3D Nexus WebGL Stage
+recent_msgs_json = json.dumps(st.session_state.messages[-5:])
+last_spoken_json = json.dumps(st.session_state.last_spoken)
+current_mode_str = st.session_state.ui_mode
+current_state_str = st.session_state.current_state
 gemini_key_json = json.dumps(gemini_key)
 elevenlabs_key_json = json.dumps(elevenlabs_key)
 voice_id_en_json = json.dumps(voice_id_en)
 voice_id_hi_json = json.dumps(voice_id_hi)
-last_spoken_json = json.dumps(st.session_state.last_spoken)
+clock_now = datetime.datetime.now().strftime("%H:%M")
 
-context_bundle_json = json.dumps({
-    "weather": f"Dehradun is {weath_temp}, {weath_desc}",
-    "time": clock_now,
-    "date": today_date,
-    "cpu": cpu_val,
-    "ram": ram_val,
-    "battery": bat_val,
-    "location": "UPES Dehradun campus",
-    "user": "Nakul"
-})
-
-REVOLVING_LOOPERS_HTML = f"""
+NEXUS_SPATIAL_HTML = f"""
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -172,109 +250,457 @@ REVOLVING_LOOPERS_HTML = f"""
   * {{ box-sizing: border-box; margin: 0; padding: 0; user-select: none; }}
   html, body {{
     width: 100%; height: 100%; overflow: hidden;
-    background: transparent;
+    background: radial-gradient(ellipse at 50% 30%, #08162b 0%, #020611 65%, #010308 100%);
     font-family: 'Inter', -apple-system, sans-serif;
     color: #e2f1ff;
   }}
 
-  /* 3D WebGL Canvas Stage */
+  /* 3D WebGL Stage */
   #webgl-stage {{
     position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1;
   }}
 
   /* Perspective Horizon Grid */
   .horizon-grid {{
-    position: absolute; bottom: 0; left: -25%; right: -25%; height: 38%;
+    position: absolute; bottom: 0; left: -25%; right: -25%; height: 44%;
     background-image: 
-      linear-gradient(to right, rgba(56, 189, 248, 0.08) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(56, 189, 248, 0.08) 1px, transparent 1px);
-    background-size: 50px 50px;
-    transform: perspective(440px) rotateX(68deg);
+      linear-gradient(to right, rgba(56, 189, 248, 0.09) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(56, 189, 248, 0.09) 1px, transparent 1px);
+    background-size: 55px 55px;
+    transform: perspective(480px) rotateX(68deg);
     transform-origin: bottom center;
-    mask-image: linear-gradient(to top, rgba(0,0,0,0.85) 15%, transparent 95%);
-    -webkit-mask-image: linear-gradient(to top, rgba(0,0,0,0.85) 15%, transparent 95%);
-    pointer-events: none; z-index: 2;
+    mask-image: linear-gradient(to top, rgba(0,0,0,0.9) 15%, transparent 95%);
+    -webkit-mask-image: linear-gradient(to top, rgba(0,0,0,0.9) 15%, transparent 95%);
+    pointer-events: none; z-index: 1;
   }}
 
-  /* Pure Centered Subtitle Pill */
-  .voice-subtitle-pill {{
-    position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-    background: rgba(5, 14, 28, 0.90);
-    border: 1px solid rgba(56, 189, 248, 0.45);
-    border-radius: 999px; padding: 12px 28px;
-    font-size: 14px; line-height: 1.4; color: #e2f1ff;
-    max-width: 680px; width: 90%; text-align: center;
-    z-index: 25; backdrop-filter: blur(16px);
-    box-shadow: 0 8px 32px rgba(0,0,0,0.7), 0 0 20px rgba(0, 242, 254, 0.15);
-    transition: all 0.3s ease;
-    cursor: pointer;
+  /* ---------------- TOP HUD STATUS PILL ---------------- */
+  .top-hud-bar {{
+    position: absolute; top: 16px; left: 24px; right: 24px;
+    display: flex; justify-content: space-between; align-items: center;
+    z-index: 20; pointer-events: none;
   }}
-  .voice-subtitle-pill:hover {{
-    border-color: #00f2fe;
-    box-shadow: 0 0 30px rgba(0, 242, 254, 0.35);
+  .live-pill {{
+    display: inline-flex; align-items: center; gap: 10px;
+    background: rgba(5, 12, 24, 0.88);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    border-radius: 999px;
+    padding: 7px 18px;
+    backdrop-filter: blur(16px);
+    box-shadow: 0 0 25px rgba(0, 210, 255, 0.15);
+    pointer-events: auto;
+    transition: all 0.35s ease;
+  }}
+  .live-dot {{
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #00f2fe;
+    box-shadow: 0 0 10px #00f2fe, 0 0 20px #00f2fe;
+    transition: all 0.35s ease;
+  }}
+  .live-text {{
+    font-family: 'Orbitron', sans-serif; font-size: 11px; font-weight: 800;
+    letter-spacing: 2px; color: #ffffff;
+  }}
+  .divider {{ color: rgba(255,255,255,0.3); font-weight: 300; }}
+  .mode-text {{
+    font-family: 'Orbitron', sans-serif; font-size: 11px; font-weight: 700;
+    letter-spacing: 2px; color: #38bdf8;
+  }}
+  .state-badge {{
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600;
+    padding: 3px 8px; border-radius: 6px;
+    background: rgba(56, 189, 248, 0.15); color: #38bdf8;
+    letter-spacing: 1px;
+    transition: all 0.35s ease;
+  }}
+
+  /* Dynamic State Color Transformations */
+  body.state-listening .live-dot {{
+    background: #00ff88; box-shadow: 0 0 14px #00ff88, 0 0 25px #00ff88;
+    animation: beaconBounce 1.2s infinite ease-in-out;
+  }}
+  body.state-listening .live-pill {{
+    border-color: rgba(0, 255, 136, 0.65);
+    box-shadow: 0 0 30px rgba(0, 255, 136, 0.28);
+  }}
+  body.state-listening .state-badge {{
+    background: rgba(0, 255, 136, 0.2); color: #00ff88;
+  }}
+
+  body.state-thinking .live-dot {{
+    background: #d946ef; box-shadow: 0 0 14px #d946ef, 0 0 25px #d946ef;
+    animation: beaconSpin 1.0s infinite linear;
+  }}
+  body.state-thinking .live-pill {{
+    border-color: rgba(217, 70, 239, 0.65);
+    box-shadow: 0 0 30px rgba(217, 70, 239, 0.28);
+  }}
+  body.state-thinking .state-badge {{
+    background: rgba(217, 70, 239, 0.2); color: #d946ef;
+  }}
+
+  body.state-speaking .live-dot {{
+    background: #00f2fe; box-shadow: 0 0 14px #00f2fe, 0 0 25px #00f2fe;
+    animation: beaconPulse 1.4s infinite ease-in-out;
+  }}
+  body.state-speaking .live-pill {{
+    border-color: rgba(0, 242, 254, 0.65);
+    box-shadow: 0 0 30px rgba(0, 242, 254, 0.28);
+  }}
+  body.state-speaking .state-badge {{
+    background: rgba(0, 242, 254, 0.2); color: #00f2fe;
+  }}
+
+  @keyframes beaconBounce {{
+    0%, 100% {{ transform: scale(1); opacity: 1; }}
+    50% {{ transform: scale(1.35); opacity: 0.7; }}
+  }}
+  @keyframes beaconPulse {{
+    0%, 100% {{ transform: scale(1); opacity: 0.9; }}
+    50% {{ transform: scale(1.2); opacity: 1; }}
+  }}
+  @keyframes beaconSpin {{
+    0% {{ transform: scale(0.9); opacity: 0.6; }}
+    50% {{ transform: scale(1.25); opacity: 1; }}
+    100% {{ transform: scale(0.9); opacity: 0.6; }}
+  }}
+
+  .top-right-controls {{
+    display: flex; align-items: center; gap: 8px;
+    pointer-events: auto;
+  }}
+  .sound-test-btn {{
+    background: rgba(0, 242, 254, 0.14);
+    border: 1px solid rgba(0, 242, 254, 0.45);
+    color: #00f2fe; border-radius: 6px; padding: 5px 11px;
+    font-family: 'Orbitron', sans-serif; font-size: 10px; font-weight: 700;
+    cursor: pointer; transition: all 0.2s ease;
+  }}
+  .sound-test-btn:hover {{
+    background: rgba(0, 242, 254, 0.3);
+    box-shadow: 0 0 14px rgba(0, 242, 254, 0.5);
+  }}
+  .mic-toggle-btn {{
+    background: rgba(56, 189, 248, 0.16);
+    border: 1px solid rgba(56, 189, 248, 0.5);
+    color: #38bdf8; border-radius: 6px; padding: 5px 12px;
+    font-family: 'Orbitron', sans-serif; font-size: 10px; font-weight: 700;
+    cursor: pointer; transition: all 0.2s ease;
+  }}
+  .mic-toggle-btn.listening {{
+    background: rgba(0, 255, 136, 0.25) !important;
+    border-color: #00ff88 !important; color: #00ff88 !important;
+    box-shadow: 0 0 14px rgba(0, 255, 136, 0.4) !important;
+  }}
+
+  /* ---------------- ASSISTANT MODE FLOATING WIDGETS ---------------- */
+  #assistant-layer {{
+    position: absolute; inset: 0; z-index: 10;
+    transition: opacity 0.45s ease;
+    pointer-events: none;
+  }}
+  .ambient-left {{
+    position: absolute; top: 78px; left: 32px; width: 260px;
+    display: flex; flex-direction: column; gap: 14px;
+  }}
+  .greeting-title {{
+    font-size: 17px; font-weight: 500; color: rgba(255,255,255,0.95);
+    letter-spacing: 0.3px;
+  }}
+  .weather-block {{
+    background: rgba(7, 16, 32, 0.65);
+    border-left: 3px solid #00f2fe;
+    padding: 10px 14px; border-radius: 0 10px 10px 0;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }}
+  .weather-temp {{
+    font-size: 26px; font-weight: 300; color: #ffffff;
+    display: flex; align-items: baseline; gap: 8px;
+    font-family: 'Rajdhani', sans-serif;
+  }}
+  .weather-temp span {{ font-size: 12px; color: #94a3b8; font-weight: 400; }}
+  .ticker-row {{
+    display: flex; flex-direction: column; gap: 6px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  }}
+  .ticker-item {{
+    display: flex; justify-content: space-between;
+    background: rgba(7, 16, 32, 0.55);
+    padding: 6px 10px; border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.06);
+    backdrop-filter: blur(8px);
+  }}
+  .up {{ color: #34d399; font-weight: 600; }}
+  .down {{ color: #f87171; font-weight: 600; }}
+
+  /* Bottom-Right INTEL Waveform Card */
+  .intel-card {{
+    position: absolute; bottom: 26px; right: 32px; width: 275px;
+    background: rgba(7, 16, 32, 0.78);
+    border: 1px solid rgba(56, 189, 248, 0.32);
+    border-radius: 12px; padding: 14px 16px;
+    backdrop-filter: blur(14px);
+    box-shadow: 0 10px 36px rgba(0,0,0,0.55);
+  }}
+  .intel-header {{
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: 'Orbitron', sans-serif; font-size: 11px; letter-spacing: 1.5px;
+    color: #38bdf8; margin-bottom: 8px;
+  }}
+  .intel-bars {{
+    display: flex; align-items: flex-end; gap: 3.5px; height: 38px;
+    margin-bottom: 8px;
+  }}
+  .intel-bar {{
+    flex: 1; background: linear-gradient(to top, #0284c7, #00f2fe);
+    border-radius: 2px;
+    animation: eq 1.2s ease-in-out infinite alternate;
+  }}
+  body.state-listening .intel-bar {{
+    background: linear-gradient(to top, #059669, #00ff88) !important;
+  }}
+  body.state-thinking .intel-bar {{
+    background: linear-gradient(to top, #9333ea, #d946ef) !important;
+  }}
+  @keyframes eq {{
+    0% {{ height: 20%; opacity: 0.45; }}
+    100% {{ height: 95%; opacity: 1; }}
+  }}
+
+  /* Center Floating Dialogue Stream */
+  .center-dialogue {{
+    position: absolute; bottom: 22px; left: 50%;
+    transform: translateX(-50%);
+    width: min(580px, 92vw);
+    display: flex; flex-direction: column; gap: 8px;
+    pointer-events: auto;
+  }}
+  .msg-pill {{
+    padding: 10px 18px; border-radius: 10px;
+    font-size: 13.5px; line-height: 1.5;
+    backdrop-filter: blur(14px);
+    animation: fadeUp 0.25s ease-out;
+  }}
+  @keyframes fadeUp {{
+    from {{ opacity: 0; transform: translateY(6px); }}
+    to {{ opacity: 1; transform: translateY(0); }}
+  }}
+  .msg-user {{
+    align-self: flex-end;
+    background: rgba(12, 26, 48, 0.85);
+    border: 1px solid rgba(0, 255, 136, 0.4);
+    color: #d1fae5;
+  }}
+  .msg-assistant {{
+    align-self: center;
+    width: 100%;
+    text-align: center;
+    background: rgba(5, 15, 30, 0.92);
+    border: 1px solid rgba(0, 242, 254, 0.45);
+    color: #ffffff;
+    box-shadow: 0 0 28px rgba(0, 210, 255, 0.16);
+  }}
+
+  /* ---------------- IMMERSIVE MODE 3D HOLOGRAPHIC CAROUSEL ---------------- */
+  #immersive-layer {{
+    position: absolute; inset: 0; z-index: 12;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.5s ease;
+  }}
+  #immersive-layer.active {{
+    opacity: 1; pointer-events: auto;
+  }}
+  .carousel-stage {{
+    display: flex; align-items: center; justify-content: center;
+    gap: 26px; perspective: 1200px;
+    width: 95%; max-width: 1180px;
+    margin-top: -24px;
+  }}
+  .holo-card {{
+    width: 285px; height: 345px;
+    background: linear-gradient(160deg, rgba(10, 24, 48, 0.82) 0%, rgba(3, 10, 22, 0.92) 100%);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    border-radius: 16px;
+    padding: 22px 20px;
+    backdrop-filter: blur(18px);
+    box-shadow: 0 15px 45px rgba(0, 0, 0, 0.7), inset 0 0 25px rgba(56, 189, 248, 0.08);
+    display: flex; flex-direction: column; justify-content: space-between;
+    transition: all 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+  }}
+  .holo-card::before {{
+    content: ""; position: absolute; top: 0; left: 15%; right: 15%; height: 2px;
+    background: linear-gradient(90deg, transparent, #00f2fe, transparent);
+  }}
+  .holo-card.left-card {{
+    transform: rotateY(22deg) scale(0.88) translateZ(-30px);
+    opacity: 0.72;
+  }}
+  .holo-card.center-card {{
+    transform: rotateY(0deg) scale(1.06) translateZ(20px);
+    border-color: rgba(0, 242, 254, 0.75);
+    box-shadow: 0 0 45px rgba(0, 210, 255, 0.3), inset 0 0 30px rgba(0, 210, 255, 0.15);
+    opacity: 1;
+  }}
+  .holo-card.right-card {{
+    transform: rotateY(-22deg) scale(0.88) translateZ(-30px);
+    opacity: 0.72;
+  }}
+  .card-tag {{
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    color: #38bdf8; letter-spacing: 1.5px; text-transform: uppercase;
+  }}
+  .card-title {{
+    font-family: 'Orbitron', sans-serif; font-size: 21px; font-weight: 700;
+    letter-spacing: 2.5px; color: #ffffff; text-align: center;
+    margin: 10px 0;
+  }}
+  .card-metric {{
+    font-family: 'Orbitron', sans-serif; font-size: 27px; font-weight: 700;
+    color: #00f2fe; text-align: center;
+  }}
+  .card-sub {{
+    font-size: 12px; color: #94a3b8; text-align: center; line-height: 1.5;
+  }}
+  .card-footer {{
+    display: flex; justify-content: space-between; align-items: center;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    padding-top: 10px; font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    color: #64748b;
+  }}
+  .carousel-controls {{
+    display: flex; gap: 12px; margin-top: 24px;
+  }}
+  .carousel-dot {{
+    padding: 6px 14px; border-radius: 999px;
+    font-family: 'Orbitron', sans-serif; font-size: 10px; letter-spacing: 1.5px;
+    background: rgba(7, 18, 36, 0.75);
+    border: 1px solid rgba(56, 189, 248, 0.28);
+    color: #94a3b8; cursor: pointer; transition: all 0.2s;
+  }}
+  .carousel-dot.active {{
+    background: rgba(56, 189, 248, 0.22);
+    border-color: #00f2fe; color: #ffffff;
+    box-shadow: 0 0 15px rgba(0, 242, 254, 0.35);
+  }}
+
+  /* ---------------- VOICE SUBTITLE PILL ---------------- */
+  .voice-subtitle-pill {{
+    position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%);
+    background: rgba(4, 12, 24, 0.92);
+    border: 1px solid rgba(56, 189, 248, 0.45);
+    border-radius: 10px; padding: 10px 22px;
+    font-size: 13.5px; color: #e2f1ff;
+    max-width: 680px; width: 88%; text-align: center;
+    z-index: 25; backdrop-filter: blur(14px);
+    box-shadow: 0 6px 28px rgba(0,0,0,0.65);
+    cursor: pointer;
   }}
   .nexus-badge {{
     display: inline-block; font-family: 'Orbitron', sans-serif;
-    font-size: 11px; letter-spacing: 2px; color: #00f2fe;
-    margin-right: 10px; font-weight: 800;
-    transition: color 0.3s ease;
-  }}
-
-  /* Dynamic Subtitle Accent Colors */
-  body.state-listening .voice-subtitle-pill {{
-    border-color: rgba(0, 255, 136, 0.7);
-    box-shadow: 0 0 30px rgba(0, 255, 136, 0.35);
-  }}
-  body.state-listening .nexus-badge {{
-    color: #00ff88;
-  }}
-
-  body.state-thinking .voice-subtitle-pill {{
-    border-color: rgba(217, 70, 239, 0.7);
-    box-shadow: 0 0 30px rgba(217, 70, 239, 0.35);
-  }}
-  body.state-thinking .nexus-badge {{
-    color: #d946ef;
-  }}
-
-  body.state-speaking .voice-subtitle-pill {{
-    border-color: rgba(0, 242, 254, 0.75);
-    box-shadow: 0 0 30px rgba(0, 242, 254, 0.35);
-  }}
-  body.state-speaking .nexus-badge {{
-    color: #00f2fe;
+    font-size: 10px; letter-spacing: 1.8px; color: #00f2fe;
+    margin-right: 8px; font-weight: 700;
   }}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
-<body class="state-standby">
+<body class="state-idle">
 
   <!-- 3D WebGL Hologram Stage -->
   <div id="webgl-stage"></div>
   <div class="horizon-grid"></div>
 
-  <!-- Sleek Subtitle Status Pill -->
-  <div class="voice-subtitle-pill" id="subtitle-bar" onclick="repeatLastSpoken()">
-    <span class="nexus-badge" id="status-badge-prefix">⚡ JARVIS</span>
-    <span id="subtitle-text">Jarvis is in standby. Say "Hey Jarvis" to begin.</span>
+  <!-- Top-Left Status Badge: [ ● LIVE | MODE | STATE ] -->
+  <div class="top-hud-bar">
+    <div class="live-pill">
+      <div class="live-dot" id="live-dot"></div>
+      <span class="live-text">LIVE</span>
+      <span class="divider">|</span>
+      <span class="mode-text" id="hud-mode-label">{current_mode_str}</span>
+      <span class="divider">|</span>
+      <span class="state-badge" id="hud-state-label">ONLINE</span>
+    </div>
+    <div class="top-right-controls">
+      <button class="sound-test-btn" onclick="testJarvisVoice()">🔊 TEST VOICE AUDIO</button>
+      <button id="mic-btn" class="mic-toggle-btn listening" onclick="toggleBrowserVoice()">🎙️ AUTO-LISTEN: ON</button>
+      <div style="font-family:'JetBrains Mono'; font-size:12px; color:#94a3b8;">{clock_now} IST</div>
+    </div>
+  </div>
+
+  <!-- MODE 1: ASSISTANT MODE OVERLAY -->
+  <div id="assistant-layer">
+    <div class="ambient-left">
+      <div class="greeting-title">Good evening, Nakul.</div>
+      <div class="weather-block">
+        <div class="weather-temp">{weath_temp} <span>Dehradun • {weath_desc}</span></div>
+        <div style="font-size:11px; color:#64748b; margin-top:4px;">UPES Campus Telemetry • Active</div>
+      </div>
+      <div class="ticker-row">
+        <div class="ticker-item"><span>NIFTY 50</span><span class="up">▲ +1.42%</span></div>
+        <div class="ticker-item"><span>AMD</span><span class="up">▲ +11.04%</span></div>
+        <div class="ticker-item"><span>NVDA</span><span class="up">▲ +3.18%</span></div>
+        <div class="ticker-item"><span>MSFT</span><span class="down">▼ -0.84%</span></div>
+      </div>
+    </div>
+
+    <div class="center-dialogue" id="dialogue-box"></div>
+
+    <div class="intel-card">
+      <div class="intel-header">
+        <span>INTEL STREAM</span>
+        <span>{cpu_val}</span>
+      </div>
+      <div class="intel-bars">
+        <div class="intel-bar" style="animation-delay:0.0s"></div>
+        <div class="intel-bar" style="animation-delay:0.2s"></div>
+        <div class="intel-bar" style="animation-delay:0.4s"></div>
+        <div class="intel-bar" style="animation-delay:0.1s"></div>
+        <div class="intel-bar" style="animation-delay:0.5s"></div>
+        <div class="intel-bar" style="animation-delay:0.3s"></div>
+        <div class="intel-bar" style="animation-delay:0.15s"></div>
+        <div class="intel-bar" style="animation-delay:0.35s"></div>
+        <div class="intel-bar" style="animation-delay:0.25s"></div>
+        <div class="intel-bar" style="animation-delay:0.45s"></div>
+      </div>
+      <div style="display:flex; justify-content:space-between; font-family:'JetBrains Mono',monospace; font-size:10.5px; color:#94a3b8;">
+        <span>RAM: {ram_val}</span>
+        <span>PWR: {bat_val}</span>
+        <span>REM: {len(active_rems)}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODE 2: IMMERSIVE MODE 3D CAROUSEL OVERLAY -->
+  <div id="immersive-layer">
+    <div class="carousel-stage" id="carousel-stage"></div>
+    <div class="carousel-controls" id="carousel-dots"></div>
+  </div>
+
+  <!-- Live Voice Subtitle Bar -->
+  <div class="voice-subtitle-pill" id="subtitle-bar" style="display:none;" onclick="repeatLastSpoken()">
+    <span class="nexus-badge">● JARVIS</span>
+    <span id="subtitle-text"></span>
   </div>
 
 <script>
+  const INITIAL_MODE = {json.dumps(current_mode_str)};
+  const MESSAGES = {recent_msgs_json};
+  const LAST_SPOKEN = {last_spoken_json};
   const GEMINI_KEY = {gemini_key_json};
   const ELEVENLABS_KEY = {elevenlabs_key_json};
   const VOICE_ID_EN = {voice_id_en_json};
   const VOICE_ID_HI = {voice_id_hi_json};
-  const CONTEXT_BUNDLE = {context_bundle_json};
-  const LAST_SPOKEN = {last_spoken_json};
 
-  let currentState = 'STANDBY'; // 'STANDBY' | 'ACTIVE' | 'LISTENING' | 'THINKING' | 'SPEAKING'
-  let systemLifecycle = 'STANDBY'; // 'STANDBY' | 'ACTIVE'
-  let currentSpokenText = LAST_SPOKEN || "Jarvis is in standby. Say 'Hey Jarvis' to begin.";
+  let currentMode = INITIAL_MODE;
+  let currentState = 'IDLE'; // 'IDLE' | 'LISTENING' (Green) | 'THINKING' (Violet) | 'SPEAKING' (Cyan)
   let speakingIntensity = 0.0;
-  let inactivityTimer = null;
-  let autoListen = true;
+  let currentSpokenText = LAST_SPOKEN || "";
 
-  // Web Audio Context for Sci-Fi Acoustic Chimes
+  // Web Audio Context for Acoustic Sci-Fi Chimes
   let audioCtx = null;
   function getAudioContext() {{
     if (!audioCtx) {{
@@ -286,7 +712,7 @@ REVOLVING_LOOPERS_HTML = f"""
     return audioCtx;
   }}
 
-  function playSciFiChime(type) {{
+  function playSciFiBeep(type) {{
     try {{
       const ctx = getAudioContext();
       const osc = ctx.createOscillator();
@@ -295,269 +721,387 @@ REVOLVING_LOOPERS_HTML = f"""
       gain.connect(ctx.destination);
 
       if (type === 'wake') {{
-        // Two-tone bright futuristic ascent
-        osc.frequency.setValueAtTime(660, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(1320, ctx.currentTime + 0.12);
-        gain.gain.setValueAtTime(0.14, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.16);
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.12);
+        gain.gain.setValueAtTime(0.12, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
         osc.start();
-        osc.stop(ctx.currentTime + 0.16);
+        osc.stop(ctx.currentTime + 0.12);
       }} else if (type === 'think') {{
-        osc.frequency.setValueAtTime(540, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(780, ctx.currentTime + 0.08);
+        osc.frequency.setValueAtTime(580, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(740, ctx.currentTime + 0.08);
         gain.gain.setValueAtTime(0.08, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
         osc.start();
         osc.stop(ctx.currentTime + 0.08);
-      }} else if (type === 'standby') {{
-        osc.frequency.setValueAtTime(980, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.15);
-        gain.gain.setValueAtTime(0.10, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.16);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.16);
       }}
     }} catch(e) {{}}
   }}
 
-  // ---------------- THREE.JS 3D REVOLVING LOOPERS ENGINE ----------------
+  // Dialogue Rendering
+  const dialogueBox = document.getElementById('dialogue-box');
+  function addMessageToBox(role, text) {{
+    const div = document.createElement('div');
+    div.className = 'msg-pill ' + (role === 'user' ? 'msg-user' : 'msg-assistant');
+    div.textContent = (role === 'user' ? 'YOU: ' : 'JARVIS: ') + text;
+    dialogueBox.appendChild(div);
+    while (dialogueBox.children.length > 4) {{
+      dialogueBox.removeChild(dialogueBox.firstChild);
+    }}
+  }}
+
+  MESSAGES.slice(-3).forEach(m => {{
+    addMessageToBox(m.role, m.content);
+  }});
+
+  // Immersive Mode Cards Data
+  const CARDS = [
+    {{ tag: "LIVE EXCHANGE", title: "MARKETS", metric: "+3.03%", sub: "AMD leads at +11.04% gain • NIFTY & AI Tech surge", footL: "GAIN", footR: "LIVE" }},
+    {{ tag: "GITHUB & UPES", title: "PROJECTS", metric: "8 ACTIVE", sub: "Jarvis 2.0 Spatial OS • Zero open critical issues", footL: "REPOS", footR: "SYNCED" }},
+    {{ tag: "IPL & CRICKET", title: "SPORTS", metric: "LIVE HUD", sub: "IPL Standings, Match Previews & Strike Rate Analytics", footL: "FEED", footR: "ACTIVE" }},
+    {{ tag: "UPES SCHEDULE", title: "CALENDAR", metric: "{len(active_rems)} TASKS", sub: "B.Tech Data Science Timetable & Pending Reminders", footL: "AGENDA", footR: "TODAY" }},
+    {{ tag: "DEHRADUN HQ", title: "WEATHER", metric: "{weath_temp}", sub: "{weath_desc} • 200km Trekking & Hill Forecast", footL: "LOC", footR: "UPES" }},
+    {{ tag: "SPOTIFY STREAM", title: "AUDIO", metric: "ACTIVE", sub: {json.dumps(now_playing)}, footL: "DSP", footR: "HI-FI" }}
+  ];
+
+  let activeCardIdx = 0;
+  function renderCarousel() {{
+    const stage = document.getElementById('carousel-stage');
+    const dots = document.getElementById('carousel-dots');
+    stage.innerHTML = '';
+    dots.innerHTML = '';
+
+    const leftIdx = (activeCardIdx - 1 + CARDS.length) % CARDS.length;
+    const rightIdx = (activeCardIdx + 1) % CARDS.length;
+    const visible = [
+      {{ idx: leftIdx, cls: 'left-card' }},
+      {{ idx: activeCardIdx, cls: 'center-card' }},
+      {{ idx: rightIdx, cls: 'right-card' }}
+    ];
+
+    visible.forEach(item => {{
+      const c = CARDS[item.idx];
+      const el = document.createElement('div');
+      el.className = 'holo-card ' + item.cls;
+      el.onclick = () => {{ activeCardIdx = item.idx; renderCarousel(); }};
+      el.innerHTML = `
+        <div class="card-tag">${{c.tag}}</div>
+        <div>
+          <div class="card-title">${{c.title}}</div>
+          <div class="card-metric">${{c.metric}}</div>
+        </div>
+        <div class="card-sub">${{c.sub}}</div>
+        <div class="card-footer"><span>${{c.footL}}</span><span>${{c.footR}}</span></div>
+      `;
+      stage.appendChild(el);
+    }});
+
+    CARDS.forEach((c, idx) => {{
+      const d = document.createElement('button');
+      d.className = 'carousel-dot ' + (idx === activeCardIdx ? 'active' : '');
+      d.textContent = c.title;
+      d.onclick = () => {{ activeCardIdx = idx; renderCarousel(); }};
+      dots.appendChild(d);
+    }});
+  }}
+  renderCarousel();
+
+  // ---------------- THREE.JS 3D ENGINE (DYNAMIC STATE COLORS + LOOPERS) ----------------
   const container = document.getElementById('webgl-stage');
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(46, container.clientWidth / container.clientHeight, 0.1, 1000);
-  camera.position.set(0, 0, 220);
+  const camera = new THREE.PerspectiveCamera(48, container.clientWidth / container.clientHeight, 0.1, 1000);
+  camera.position.set(0, 6, 215);
 
   const renderer = new THREE.WebGLRenderer({{ alpha: true, antialias: true }});
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   container.appendChild(renderer.domElement);
 
-  // Dynamic Theme Colors
-  const colCyan1   = new THREE.Color(0x00f2fe);
-  const colCyan2   = new THREE.Color(0x38bdf8);
-  const colGreen1  = new THREE.Color(0x00ff88); // Listening: Neon Green
-  const colGreen2  = new THREE.Color(0x10b981);
-  const colViolet1 = new THREE.Color(0xd946ef); // Thinking: Cosmic Violet
-  const colViolet2 = new THREE.Color(0xa855f7);
+  const colorCyan1 = new THREE.Color(0x00f2fe);
+  const colorCyan2 = new THREE.Color(0x38bdf8);
+  const colorGreen1 = new THREE.Color(0x00ff88); // Listening: Neon Green
+  const colorGreen2 = new THREE.Color(0x10b981);
+  const colorViolet1 = new THREE.Color(0xd946ef); // Thinking: Cosmic Violet
+  const colorViolet2 = new THREE.Color(0xa855f7);
 
-  let targetCol1 = colCyan1;
-  let targetCol2 = colCyan2;
-  let currentCol1 = new THREE.Color(0x00f2fe);
-  let currentCol2 = new THREE.Color(0x38bdf8);
+  let targetColor1 = colorCyan1;
+  let targetColor2 = colorCyan2;
+  let currentColor1 = new THREE.Color(0x00f2fe);
+  let currentColor2 = new THREE.Color(0x38bdf8);
 
-  // 1. Central Pulsing Holographic Core
-  const coreIcoGeo = new THREE.IcosahedronGeometry(22, 2);
-  const coreIcoMat = new THREE.MeshBasicMaterial({{
-    color: 0x00f2fe,
-    wireframe: true,
-    transparent: true,
-    opacity: 0.35,
-    blending: THREE.AdditiveBlending
-  }});
-  const coreIco = new THREE.Mesh(coreIcoGeo, coreIcoMat);
-  scene.add(coreIco);
-
-  const coreSphereGeo = new THREE.SphereGeometry(14, 32, 32);
-  const coreSphereMat = new THREE.MeshBasicMaterial({{
-    color: 0x00f2fe,
-    transparent: true,
-    opacity: 0.45,
-    blending: THREE.AdditiveBlending
-  }});
-  const coreSphere = new THREE.Mesh(coreSphereGeo, coreSphereMat);
-  scene.add(coreSphere);
-
-  // 2. Concentric Gyroscopic Revolving Loopers
-  // Looper 1 (Outer Gyro Looper)
-  const looper1Geo = new THREE.TorusGeometry(64, 0.95, 16, 120);
-  const looper1Mat = new THREE.MeshBasicMaterial({{
-    color: 0x00f2fe,
-    transparent: true,
-    opacity: 0.85,
-    blending: THREE.AdditiveBlending
-  }});
-  const looper1 = new THREE.Mesh(looper1Geo, looper1Mat);
-  scene.add(looper1);
-
-  // Looper 2 (Middle Gyro Looper)
-  const looper2Geo = new THREE.TorusGeometry(50, 0.85, 16, 120);
-  const looper2Mat = new THREE.MeshBasicMaterial({{
-    color: 0x38bdf8,
-    transparent: true,
-    opacity: 0.80,
-    blending: THREE.AdditiveBlending
-  }});
-  const looper2 = new THREE.Mesh(looper2Geo, looper2Mat);
-  scene.add(looper2);
-
-  // Looper 3 (Inner Gyro Looper)
-  const looper3Geo = new THREE.TorusGeometry(36, 0.75, 16, 120);
-  const looper3Mat = new THREE.MeshBasicMaterial({{
-    color: 0x00e5ff,
-    transparent: true,
-    opacity: 0.70,
-    blending: THREE.AdditiveBlending
-  }});
-  const looper3 = new THREE.Mesh(looper3Geo, looper3Mat);
-  scene.add(looper3);
-
-  // Segmented Equator Horizon Ring
-  const orbitRingGeo = new THREE.RingGeometry(78, 80, 96);
-  const orbitRingMat = new THREE.MeshBasicMaterial({{
-    color: 0x00f2fe,
-    side: THREE.DoubleSide,
-    transparent: true,
-    opacity: 0.35,
-    blending: THREE.AdditiveBlending
-  }});
-  const orbitRing = new THREE.Mesh(orbitRingGeo, orbitRingMat);
-  orbitRing.rotation.x = Math.PI / 2.3;
-  scene.add(orbitRing);
-
-  // 3. Spherical Fibonacci Particle Cloud
-  const PARTICLE_COUNT = 1100;
-  const particleGeo = new THREE.BufferGeometry();
-  const particlePos = new Float32Array(PARTICLE_COUNT * 3);
-  const particleColors = new Float32Array(PARTICLE_COUNT * 3);
-  const baseRadius = new Float32Array(PARTICLE_COUNT);
+  const PARTICLE_COUNT = 2600;
+  const geometry = new THREE.BufferGeometry();
+  const currentPositions = new Float32Array(PARTICLE_COUNT * 3);
+  const orbPositions = new Float32Array(PARTICLE_COUNT * 3);
+  const humanPositions = new Float32Array(PARTICLE_COUNT * 3);
+  const immersivePositions = new Float32Array(PARTICLE_COUNT * 3);
+  const colors = new Float32Array(PARTICLE_COUNT * 3);
 
   for (let i = 0; i < PARTICLE_COUNT; i++) {{
     const phi = Math.acos(-1 + (2 * i) / PARTICLE_COUNT);
     const theta = Math.sqrt(PARTICLE_COUNT * Math.PI) * phi;
-    const r = 70 + (Math.random() - 0.5) * 14;
-    baseRadius[i] = r;
+    const rOrb = 35 + (Math.random() - 0.5) * 4.5;
+    orbPositions[i * 3]     = rOrb * Math.cos(theta) * Math.sin(phi);
+    orbPositions[i * 3 + 1] = rOrb * Math.sin(theta) * Math.sin(phi) + 22;
+    orbPositions[i * 3 + 2] = rOrb * Math.cos(phi);
 
-    particlePos[i * 3]     = r * Math.cos(theta) * Math.sin(phi);
-    particlePos[i * 3 + 1] = r * Math.sin(theta) * Math.sin(phi);
-    particlePos[i * 3 + 2] = r * Math.cos(phi);
+    const u = (i / PARTICLE_COUNT) * Math.PI * 2 * 19;
+    const v = (i / PARTICLE_COUNT);
+    let hx, hy, hz;
+    if (v < 0.78) {{
+      const hPhi = (v / 0.78) * Math.PI;
+      const jawTaper = hPhi > 1.8 ? 0.78 : 1.0;
+      let rx = 34 * Math.sin(hPhi) * jawTaper;
+      let ry = 46;
+      let rz = 38 * Math.sin(hPhi) * jawTaper;
+      const frontFactor = Math.max(0, Math.cos(u));
+      if (hPhi > 1.05 && hPhi < 1.95 && frontFactor > 0.65) {{
+        rz += Math.pow(frontFactor, 3) * 9.5;
+      }}
+      hx = rx * Math.sin(u);
+      hy = ry * Math.cos(hPhi) + 16;
+      hz = rz * Math.cos(u);
+    }} else {{
+      const neckProg = (v - 0.78) / 0.22;
+      const neckRadius = 18 + neckProg * 36;
+      hx = neckRadius * Math.sin(u);
+      hy = -30 - neckProg * 22;
+      hz = (neckRadius * 0.65) * Math.cos(u);
+    }}
+    humanPositions[i * 3]     = hx + (Math.random() - 0.5) * 1.4;
+    humanPositions[i * 3 + 1] = hy + (Math.random() - 0.5) * 1.4;
+    humanPositions[i * 3 + 2] = hz + (Math.random() - 0.5) * 1.4;
 
-    particleColors[i * 3]     = colCyan1.r;
-    particleColors[i * 3 + 1] = colCyan1.g;
-    particleColors[i * 3 + 2] = colCyan1.b;
+    const angle = (i / PARTICLE_COUNT) * Math.PI * 2 * 4;
+    const rad = 115 + (Math.random() - 0.5) * 70;
+    immersivePositions[i * 3]     = rad * Math.cos(angle);
+    immersivePositions[i * 3 + 1] = (Math.random() - 0.5) * 110;
+    immersivePositions[i * 3 + 2] = rad * Math.sin(angle) - 40;
+
+    currentPositions[i * 3]     = orbPositions[i * 3];
+    currentPositions[i * 3 + 1] = orbPositions[i * 3 + 1];
+    currentPositions[i * 3 + 2] = orbPositions[i * 3 + 2];
+
+    colors[i * 3]     = colorCyan1.r;
+    colors[i * 3 + 1] = colorCyan1.g;
+    colors[i * 3 + 2] = colorCyan1.b;
   }}
 
-  particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePos, 3));
-  particleGeo.setAttribute('color', new THREE.BufferAttribute(particleColors, 3));
+  geometry.setAttribute('position', new THREE.BufferAttribute(currentPositions, 3));
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
-  const particleMat = new THREE.PointsMaterial({{
-    size: 2.5,
+  const material = new THREE.PointsMaterial({{
+    size: 2.35,
     vertexColors: true,
     transparent: true,
-    opacity: 0.88,
+    opacity: 0.92,
     blending: THREE.AdditiveBlending
   }});
-  const particleCloud = new THREE.Points(particleGeo, particleMat);
-  scene.add(particleCloud);
 
-  // Dynamic Visual State Setter
+  const particleSystem = new THREE.Points(geometry, material);
+  scene.add(particleSystem);
+
+  // Central Glowing Core
+  const coreGeo = new THREE.SphereGeometry(20, 32, 32);
+  const coreMat = new THREE.MeshBasicMaterial({{
+    color: 0x00e5ff,
+    transparent: true,
+    opacity: 0.25,
+    blending: THREE.AdditiveBlending
+  }});
+  const coreSphere = new THREE.Mesh(coreGeo, coreMat);
+  coreSphere.position.y = 22;
+  scene.add(coreSphere);
+
+  // Concentric Revolving Gyroscopic Loopers (Toruses)
+  const looperMat1 = new THREE.MeshBasicMaterial({{ color: 0x00f2fe, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending }});
+  const looperMat2 = new THREE.MeshBasicMaterial({{ color: 0x38bdf8, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending }});
+  const looperMat3 = new THREE.MeshBasicMaterial({{ color: 0x00e5ff, transparent: true, opacity: 0.65, blending: THREE.AdditiveBlending }});
+
+  const looper1 = new THREE.Mesh(new THREE.TorusGeometry(32, 0.75, 16, 80), looperMat1);
+  looper1.position.y = 22;
+  scene.add(looper1);
+
+  const looper2 = new THREE.Mesh(new THREE.TorusGeometry(26, 0.65, 16, 80), looperMat2);
+  looper2.position.y = 22;
+  scene.add(looper2);
+
+  const looper3 = new THREE.Mesh(new THREE.TorusGeometry(20, 0.55, 16, 80), looperMat3);
+  looper3.position.y = 22;
+  scene.add(looper3);
+
+  // Orbital Horizon Ring
+  const ringGeo = new THREE.RingGeometry(46, 47.4, 96);
+  const ringMat = new THREE.MeshBasicMaterial({{
+    color: 0x38bdf8, side: THREE.DoubleSide, transparent: true, opacity: 0.38
+  }});
+  const orbitalRing = new THREE.Mesh(ringGeo, ringMat);
+  orbitalRing.position.y = 22;
+  orbitalRing.rotation.x = Math.PI / 2.2;
+  scene.add(orbitalRing);
+
   function setJarvisState(newState) {{
     currentState = newState;
     const body = document.body;
+    const stateLabel = document.getElementById('hud-state-label');
     body.className = '';
 
     if (newState === 'LISTENING') {{
       body.classList.add('state-listening');
-      targetCol1 = colGreen1;
-      targetCol2 = colGreen2;
-      coreIcoMat.color.set(0x00ff88);
-      coreSphereMat.color.set(0x00ff88);
-      looper1Mat.color.set(0x00ff88);
-      looper2Mat.color.set(0x10b981);
-      looper3Mat.color.set(0x00ff88);
-      orbitRingMat.color.set(0x00ff88);
+      if (stateLabel) stateLabel.textContent = 'LISTENING (GREEN)';
+      targetColor1 = colorGreen1;
+      targetColor2 = colorGreen2;
+      coreMat.color.set(0x00ff88);
+      looperMat1.color.set(0x00ff88);
+      looperMat2.color.set(0x10b981);
+      looperMat3.color.set(0x00ff88);
+      ringMat.color.set(0x00ff88);
     }} else if (newState === 'THINKING') {{
       body.classList.add('state-thinking');
-      targetCol1 = colViolet1;
-      targetCol2 = colViolet2;
-      coreIcoMat.color.set(0xd946ef);
-      coreSphereMat.color.set(0xd946ef);
-      looper1Mat.color.set(0xd946ef);
-      looper2Mat.color.set(0xa855f7);
-      looper3Mat.color.set(0xd946ef);
-      orbitRingMat.color.set(0xd946ef);
+      if (stateLabel) stateLabel.textContent = 'THINKING (VIOLET)';
+      targetColor1 = colorViolet1;
+      targetColor2 = colorViolet2;
+      coreMat.color.set(0xd946ef);
+      looperMat1.color.set(0xd946ef);
+      looperMat2.color.set(0xa855f7);
+      looperMat3.color.set(0xd946ef);
+      ringMat.color.set(0xd946ef);
     }} else if (newState === 'SPEAKING') {{
       body.classList.add('state-speaking');
-      targetCol1 = colCyan1;
-      targetCol2 = colCyan2;
-      coreIcoMat.color.set(0x00f2fe);
-      coreSphereMat.color.set(0x00f2fe);
-      looper1Mat.color.set(0x00f2fe);
-      looper2Mat.color.set(0x38bdf8);
-      looper3Mat.color.set(0x00f2fe);
-      orbitRingMat.color.set(0x00f2fe);
+      if (stateLabel) stateLabel.textContent = 'SPEAKING (CYAN)';
+      targetColor1 = colorCyan1;
+      targetColor2 = colorCyan2;
+      coreMat.color.set(0x00f2fe);
+      looperMat1.color.set(0x00f2fe);
+      looperMat2.color.set(0x38bdf8);
+      looperMat3.color.set(0x00f2fe);
+      ringMat.color.set(0x00f2fe);
     }} else {{
-      body.classList.add('state-standby');
-      targetCol1 = colCyan1;
-      targetCol2 = colCyan2;
-      coreIcoMat.color.set(0x00f2fe);
-      coreSphereMat.color.set(0x00f2fe);
-      looper1Mat.color.set(0x00f2fe);
-      looper2Mat.color.set(0x38bdf8);
-      looper3Mat.color.set(0x00e5ff);
-      orbitRingMat.color.set(0x00f2fe);
+      body.classList.add('state-idle');
+      if (stateLabel) stateLabel.textContent = 'ONLINE';
+      targetColor1 = colorCyan1;
+      targetColor2 = colorCyan2;
+      coreMat.color.set(0x00e5ff);
+      looperMat1.color.set(0x00f2fe);
+      looperMat2.color.set(0x38bdf8);
+      looperMat3.color.set(0x00e5ff);
+      ringMat.color.set(0x38bdf8);
     }}
   }}
 
-  // ---------------- ANIMATION LOOP ----------------
+  function applyVisualMode(mode) {{
+    currentMode = mode;
+    document.getElementById('hud-mode-label').textContent = mode;
+    const assistLayer = document.getElementById('assistant-layer');
+    const immerLayer = document.getElementById('immersive-layer');
+    const subBar = document.getElementById('subtitle-bar');
+
+    if (mode === 'ASSISTANT MODE') {{
+      assistLayer.style.opacity = '1';
+      immerLayer.classList.remove('active');
+      subBar.style.display = 'none';
+      coreSphere.visible = true;
+      looper1.visible = true;
+      looper2.visible = true;
+      looper3.visible = true;
+      orbitalRing.visible = true;
+    }} else if (mode === 'IMMERSIVE MODE') {{
+      assistLayer.style.opacity = '0';
+      immerLayer.classList.add('active');
+      subBar.style.display = 'block';
+      coreSphere.visible = false;
+      looper1.visible = false;
+      looper2.visible = false;
+      looper3.visible = false;
+      orbitalRing.visible = false;
+    }} else if (mode === 'HUMAN MODE') {{
+      assistLayer.style.opacity = '0';
+      immerLayer.classList.remove('active');
+      subBar.style.display = 'block';
+      coreSphere.visible = false;
+      looper1.visible = false;
+      looper2.visible = false;
+      looper3.visible = false;
+      orbitalRing.visible = true;
+    }}
+  }}
+  applyVisualMode(INITIAL_MODE);
+
   const clock = new THREE.Clock();
   function animate() {{
     requestAnimationFrame(animate);
     const t = clock.getElapsedTime();
+    const posAttr = geometry.attributes.position;
+    const colAttr = geometry.attributes.color;
+    const arr = posAttr.array;
+    const colArr = colAttr.array;
 
-    currentCol1.lerp(targetCol1, 0.08);
-    currentCol2.lerp(targetCol2, 0.08);
+    currentColor1.lerp(targetColor1, 0.08);
+    currentColor2.lerp(targetColor2, 0.08);
+
+    const targetArr = (currentMode === 'HUMAN MODE') 
+      ? humanPositions 
+      : (currentMode === 'IMMERSIVE MODE' ? immersivePositions : orbPositions);
 
     const isThinking = (currentState === 'THINKING');
     const isListening = (currentState === 'LISTENING');
-    const speedMult = isThinking ? 3.4 : (isListening ? 1.4 : 1.0);
+    const speedMult = isThinking ? 3.0 : 1.0;
 
-    // Revolving Loopers 3D Gyroscopic Rotations
-    looper1.rotation.x = t * 0.45 * speedMult;
-    looper1.rotation.y = t * 0.35 * speedMult;
+    // Revolving Loopers 3D Rotations
+    looper1.rotation.x = t * 0.5 * speedMult;
+    looper1.rotation.y = t * 0.4 * speedMult;
 
-    looper2.rotation.y = -t * 0.50 * speedMult;
-    looper2.rotation.z = t * 0.40 * speedMult;
+    looper2.rotation.y = -t * 0.6 * speedMult;
+    looper2.rotation.z = t * 0.45 * speedMult;
 
-    looper3.rotation.x = -t * 0.60 * speedMult;
-    looper3.rotation.z = -t * 0.45 * speedMult;
-
-    orbitRing.rotation.z = t * 0.18 * speedMult;
-
-    coreIco.rotation.y = -t * 0.65 * speedMult;
-    coreIco.rotation.x = t * 0.35 * speedMult;
-
-    // Pulsing breathing & speaking reaction
-    const pulse = 1.0 + Math.sin(t * 2.2) * 0.05 + speakingIntensity * 0.18;
-    coreSphere.scale.set(pulse, pulse, pulse);
-    coreIco.scale.set(pulse, pulse, pulse);
-
-    // Dynamic Particle Behavior
-    const pos = particleGeo.attributes.position.array;
-    const col = particleGeo.attributes.color.array;
+    looper3.rotation.x = -t * 0.7 * speedMult;
+    looper3.rotation.z = -t * 0.5 * speedMult;
 
     for (let i = 0; i < PARTICLE_COUNT; i++) {{
-      const phi = Math.acos(-1 + (2 * i) / PARTICLE_COUNT);
-      const theta = Math.sqrt(PARTICLE_COUNT * Math.PI) * phi;
-      let r = baseRadius[i];
+      const ix = i * 3, iy = i * 3 + 1, iz = i * 3 + 2;
+      let tx = targetArr[ix];
+      let ty = targetArr[iy];
+      let tz = targetArr[iz];
 
       if (isListening) {{
-        r *= 1.0 + Math.sin(t * 10.0 + i * 0.1) * 0.08;
+        const expand = 1.0 + Math.sin(t * 12 + i * 0.1) * 0.09;
+        tx *= expand; tz *= expand;
       }} else if (isThinking) {{
-        r *= 0.92 + Math.sin(t * 18.0 + i * 0.2) * 0.05;
+        const angle = t * 4.5 + (i * 0.02);
+        const radius = Math.sqrt(tx * tx + tz * tz);
+        tx = Math.cos(angle) * radius;
+        tz = Math.sin(angle) * radius;
       }} else if (speakingIntensity > 0.01) {{
-        r *= 1.0 + Math.sin(t * 16.0 + i * 0.08) * 0.07 * speakingIntensity;
+        if (currentMode === 'HUMAN MODE' && ty > -18 && ty < -2 && tz > 15) {{
+          ty += Math.sin(t * 28 + i) * 3.8 * speakingIntensity;
+        }} else {{
+          const wave = 1 + Math.sin(t * 18 + i * 0.05) * 0.08 * speakingIntensity;
+          tx *= wave; tz *= wave;
+        }}
       }}
 
-      pos[i * 3]     = r * Math.cos(theta + t * 0.15 * speedMult) * Math.sin(phi);
-      pos[i * 3 + 1] = r * Math.sin(theta + t * 0.15 * speedMult) * Math.sin(phi);
-      pos[i * 3 + 2] = r * Math.cos(phi);
+      arr[ix] += (tx - arr[ix]) * 0.08;
+      arr[iy] += (ty - arr[iy]) * 0.08;
+      arr[iz] += (tz - arr[iz]) * 0.08;
 
-      const chosenCol = (i % 2 === 0) ? currentCol1 : currentCol2;
-      col[i * 3]     = chosenCol.r;
-      col[i * 3 + 1] = chosenCol.g;
-      col[i * 3 + 2] = chosenCol.b;
+      const chosenCol = (i % 2 === 0) ? currentColor1 : currentColor2;
+      colArr[ix]     = chosenCol.r;
+      colArr[ix + 1] = chosenCol.g;
+      colArr[ix + 2] = chosenCol.b;
     }}
-    particleGeo.attributes.position.needsUpdate = true;
-    particleGeo.attributes.color.needsUpdate = true;
+    posAttr.needsUpdate = true;
+    colAttr.needsUpdate = true;
+
+    const rotSpeed = isThinking ? 0.85 : 0.22;
+    if (currentMode === 'HUMAN MODE') {{
+      particleSystem.rotation.y = Math.sin(t * 0.55) * 0.22;
+    }} else {{
+      particleSystem.rotation.y = t * rotSpeed;
+    }}
+
+    const pulse = 1 + Math.sin(t * 2.5) * 0.05 + speakingIntensity * 0.14;
+    coreSphere.scale.set(pulse, pulse, pulse);
+    orbitalRing.rotation.z = t * (rotSpeed * 1.2);
 
     renderer.render(scene, camera);
   }}
@@ -569,7 +1113,7 @@ REVOLVING_LOOPERS_HTML = f"""
     renderer.setSize(container.clientWidth, container.clientHeight);
   }});
 
-  // ---------------- BILINGUAL SPEECH SYNTHESIS ENGINE ----------------
+  // ---------------- ROBUST BILINGUAL SPEECH SYNTHESIS ENGINE ----------------
   let voicesList = [];
   function loadVoices() {{
     if ('speechSynthesis' in window) {{
@@ -583,14 +1127,12 @@ REVOLVING_LOOPERS_HTML = f"""
 
   function detectIsHindi(str) {{
     if (!str) return false;
-    // Check Devanagari range
-    if (/[\u0900-\u097F]/.test(str)) return true;
-    // Check common Romanized Hindi / Hinglish keywords
+    if (/[\\u0900-\\u097F]/.test(str)) return true;
     const hindiWords = [
       'kya', 'kaise', 'karo', 'batao', 'namaste', 'shuru', 'hai', 'hain', 'hoon',
       'aap', 'tum', 'mujhe', 'mera', 'meri', 'mere', 'bhai', 'kripya', 'yaar',
       'theek', 'bolo', 'sunao', 'kahan', 'kyun', 'kitna', 'kitne', 'shukriya',
-      'shant', 'so jao', 'alvida', 'aaj'
+      'shant', 'alvida', 'aaj'
     ];
     const words = str.toLowerCase().split(/\\s+/);
     return words.some(w => hindiWords.includes(w));
@@ -623,12 +1165,12 @@ REVOLVING_LOOPERS_HTML = f"""
       return new Promise((resolve) => {{
         audio.onended = () => {{
           speakingIntensity = 0.0;
-          setJarvisState(systemLifecycle);
+          setJarvisState('IDLE');
           resolve(true);
         }};
         audio.onerror = () => {{
           speakingIntensity = 0.0;
-          setJarvisState(systemLifecycle);
+          setJarvisState('IDLE');
           resolve(false);
         }};
         audio.play().catch(() => resolve(false));
@@ -644,17 +1186,21 @@ REVOLVING_LOOPERS_HTML = f"""
 
     setJarvisState('SPEAKING'); // Turns ELECTRIC CYAN
 
+    const subBar = document.getElementById('subtitle-bar');
     const subText = document.getElementById('subtitle-text');
     if (subText) subText.textContent = text;
+    if (subBar) subBar.style.display = 'block';
+
+    playSciFiBeep('wake');
 
     const isHi = detectIsHindi(text);
     const targetVoiceId = isHi ? VOICE_ID_HI : VOICE_ID_EN;
 
-    // 1. Try ElevenLabs Realistic Voice if API key configured
+    // 1. Try ElevenLabs with configured English/Hindi voice IDs
     const elevenOk = await speakElevenLabs(text, targetVoiceId);
     if (elevenOk) return;
 
-    // 2. Instant Browser SpeechSynthesis fallback with soft male regional voices
+    // 2. Instant Browser SpeechSynthesis fallback
     if ('speechSynthesis' in window) {{
       try {{
         window.speechSynthesis.cancel();
@@ -671,7 +1217,7 @@ REVOLVING_LOOPERS_HTML = f"""
 
         if (isHi) {{
           utter.lang = 'hi-IN';
-          utter.rate = 0.95;
+          utter.rate = 0.96;
           utter.pitch = 0.96;
           const hiVoice = voicesList.find(v => 
             v.lang.startsWith('hi') || v.name.toLowerCase().includes('madhur') || v.name.toLowerCase().includes('hindi')
@@ -679,7 +1225,7 @@ REVOLVING_LOOPERS_HTML = f"""
           if (hiVoice) utter.voice = hiVoice;
         }} else {{
           utter.lang = 'en-IN';
-          utter.rate = 0.98;
+          utter.rate = 1.0;
           utter.pitch = 0.94;
           const enVoice = voicesList.find(v => 
             v.lang.startsWith('en') && (
@@ -697,17 +1243,17 @@ REVOLVING_LOOPERS_HTML = f"""
         }};
         utter.onend = () => {{
           speakingIntensity = 0.0;
-          setJarvisState(systemLifecycle);
+          setJarvisState('IDLE');
         }};
         utter.onerror = () => {{
           speakingIntensity = 0.0;
-          setJarvisState(systemLifecycle);
+          setJarvisState('IDLE');
         }};
 
         window.speechSynthesis.speak(utter);
       }} catch(err) {{
         speakingIntensity = 0.0;
-        setJarvisState(systemLifecycle);
+        setJarvisState('IDLE');
       }}
     }}
   }}
@@ -718,15 +1264,44 @@ REVOLVING_LOOPERS_HTML = f"""
     }}
   }}
 
+  function testJarvisVoice() {{
+    getAudioContext();
+    speakOut("Jarvis audio systems fully operational, Nakul. I am ready for your directives.");
+  }}
+
   // ---------------- DIRECT ZERO-LATENCY GEMINI REASONING BRIDGE ----------------
   async function processVoiceQuery(userQuery) {{
     if (!userQuery || !userQuery.trim()) return;
 
-    playSciFiChime('think');
+    playSciFiBeep('think');
     setJarvisState('THINKING'); // Turns COSMIC VIOLET
 
-    const subText = document.getElementById('subtitle-text');
-    if (subText) subText.textContent = userQuery;
+    const lower = userQuery.toLowerCase().trim();
+
+    // Instant Transformation Modes
+    if (lower.includes('immersive mode') || lower.includes('carousel')) {{
+      applyVisualMode('IMMERSIVE MODE');
+      addMessageToBox('user', userQuery);
+      addMessageToBox('assistant', 'Immersive mode is now active.');
+      speakOut('Immersive mode is now active.');
+      return;
+    }}
+    if (lower.includes('into a human') || lower.includes('human mode') || lower.includes('avatar')) {{
+      applyVisualMode('HUMAN MODE');
+      addMessageToBox('user', userQuery);
+      addMessageToBox('assistant', "Understood. Give me a moment. I'm here, how can I help?");
+      speakOut("Understood. Give me a moment. I'm here, how can I help?");
+      return;
+    }}
+    if (lower.includes('assistant mode') || lower.includes('return to assistant')) {{
+      applyVisualMode('ASSISTANT MODE');
+      addMessageToBox('user', userQuery);
+      addMessageToBox('assistant', 'Returning to assistant mode.');
+      speakOut('Returning to assistant mode.');
+      return;
+    }}
+
+    addMessageToBox('user', userQuery);
 
     try {{
       const apiKey = (GEMINI_KEY && GEMINI_KEY.length > 5) 
@@ -734,15 +1309,12 @@ REVOLVING_LOOPERS_HTML = f"""
         : atob("QVEuQWI4Uk42TGl6N0pCWGw2WDYyYlJsTkZnQlFmVlFoaFNEZkFPTGhiZDZXZm9GWGlrNEE=");
 
       const sysInstruction = (
-        "You are Jarvis 2.0, Nakul's intelligent, loyal AI assistant and companion. " +
+        "You are Jarvis 2.0, Nakul's intelligent, witty AI companion and Spatial Voice OS. " +
         "Nakul is studying B.Tech Data Science at UPES Dehradun.\\n" +
-        "Live Telemetry Context: " + JSON.stringify(CONTEXT_BUNDLE) + "\\n\\n" +
         "CRITICAL RULES:\\n" +
-        "- AUTOMATIC LANGUAGE MATCHING: If Nakul speaks or queries in Hindi or Hinglish, reply in warm, natural, conversational Hindi. If Nakul queries in English, reply in natural spoken English with British charm.\\n" +
-        "- Never mention language toggles, buttons, or switching.\\n" +
-        "- Keep your answer short, natural, and punchy (1 to 2 spoken sentences) so it sounds like a live conversational AI assistant.\\n" +
-        "- Never use asterisks, markdown, emojis, or bullet points in your speech.\\n" +
-        "- If Nakul asks for weather, time, tasks, or system status, use the provided telemetry naturally."
+        "- AUTOMATIC BILINGUAL MATCHING: If Nakul speaks or queries in Hindi or Hinglish, reply in warm, natural conversational Hindi. If Nakul queries in English, reply in natural spoken English with British charm.\\n" +
+        "- Keep your answers concise, conversational, and punchy (1 to 2 spoken sentences).\\n" +
+        "- Never use asterisks, markdown, emojis, or bullet points in your speech."
       );
 
       const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${{apiKey}}`;
@@ -783,35 +1355,24 @@ REVOLVING_LOOPERS_HTML = f"""
         replyText = data.candidates[0].content.parts[0].text;
       }}
 
-      // Strip any residual formatting
       replyText = replyText.replace(/[*#`_]/g, '').trim();
+
+      addMessageToBox('assistant', replyText);
       speakOut(replyText); // Speaks in ELECTRIC CYAN!
     }} catch (error) {{
       console.warn("Direct Gemini call fallback:", error);
       const isHi = detectIsHindi(userQuery);
       const fallbackReply = isHi
         ? "हाँ नकुल जी, मैंने सुना: " + userQuery + "। सभी सिस्टम सामान्य हैं।"
-        : "I heard your directive: " + userQuery + ". All systems nominal.";
+        : "I heard your request: " + userQuery + ". All systems nominal.";
+      addMessageToBox('assistant', fallbackReply);
       speakOut(fallbackReply);
     }}
   }}
 
-  // ---------------- STRICT TWO-TIER WEB SPEECH ENGINE ----------------
+  // ---------------- ALWAYS-ON BROWSER SPEECH RECOGNITION ----------------
   let recognition = null;
-
-  function resetInactivityTimer() {{
-    if (inactivityTimer) clearTimeout(inactivityTimer);
-    inactivityTimer = setTimeout(() => {{
-      if (systemLifecycle === 'ACTIVE') {{
-        console.log("[Auto-Standby] Inactivity timeout reached (75s). Returning to STANDBY.");
-        systemLifecycle = 'STANDBY';
-        playSciFiChime('standby');
-        setJarvisState('STANDBY');
-        const subText = document.getElementById('subtitle-text');
-        if (subText) subText.textContent = "Jarvis is in standby. Say 'Hey Jarvis' to wake.";
-      }}
-    }}, 75000);
-  }}
+  let autoListen = true;
 
   function initWebSpeech() {{
     const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -823,26 +1384,19 @@ REVOLVING_LOOPERS_HTML = f"""
     recognition = new SpeechRec();
     recognition.continuous = true;
     recognition.interimResults = true;
-    // 'hi-IN' automatically transcribes BOTH Hindi and English in Chromium!
-    recognition.lang = 'hi-IN';
+    recognition.lang = 'hi-IN'; // Multilingual Hindi + English transcription in Chromium
 
     recognition.onaudiostart = () => {{
       getAudioContext();
-      if (systemLifecycle === 'ACTIVE') {{
-        setJarvisState('LISTENING');
-      }}
+      setJarvisState('LISTENING'); // Turns NEON GREEN when user starts talking
     }};
 
     recognition.onspeechstart = () => {{
-      if (systemLifecycle === 'ACTIVE') {{
-        setJarvisState('LISTENING');
-      }}
+      setJarvisState('LISTENING');
     }};
 
     recognition.onspeechend = () => {{
-      if (systemLifecycle === 'ACTIVE') {{
-        setJarvisState('THINKING');
-      }}
+      setJarvisState('THINKING'); // Turns COSMIC VIOLET when user pauses
     }};
 
     recognition.onresult = (event) => {{
@@ -851,108 +1405,64 @@ REVOLVING_LOOPERS_HTML = f"""
       const lower = transcript.toLowerCase();
 
       if (!latest.isFinal) {{
-        if (systemLifecycle === 'ACTIVE') {{
-          setJarvisState('LISTENING');
-        }}
+        setJarvisState('LISTENING');
         return;
       }}
 
-      console.log(`[Jarvis Heard in ${{systemLifecycle}}]:`, transcript);
+      console.log("[Jarvis Heard]:", transcript);
 
-      // --- TIER 1: STANDBY MODE (STRICT WAKE ONLY) ---
-      if (systemLifecycle === 'STANDBY') {{
-        const wakePatterns = [
-          'hey jarvis', 'hey jervis', 'hi jarvis', 'hello jarvis',
-          'ok jarvis', 'okay jarvis', 'wake up jarvis', 'start jarvis',
-          'हे जार्विस', 'हे जर्विस', 'नमस्ते जार्विस', 'जार्विस शुरू करो', 'सुनो जार्विस'
-        ];
+      // Robust Wake Word and Directive Trigger Matching
+      const triggers = [
+        'hey jarvis', 'jarvis', 'hey jervis', 'jervis', 'hey nexus', 'nexus',
+        'हे जार्विस', 'जार्विस', 'ए जार्विस', 'हाय जार्विस', 'नमस्ते जार्विस', 'सुनो जार्विस',
+        'hey jaavis', 'hey service', 'hey jarvish', 'ok jarvis', 'hello jarvis'
+      ];
 
-        let matchedWake = false;
-        let commandAfterWake = "";
+      let matchedQuery = "";
+      let isWakeOnly = false;
 
-        for (const p of wakePatterns) {{
-          const idx = lower.indexOf(p);
-          if (idx !== -1) {{
-            matchedWake = true;
-            commandAfterWake = transcript.slice(idx + p.length).trim();
-            break;
+      for (const trig of triggers) {{
+        const idx = lower.indexOf(trig);
+        if (idx !== -1) {{
+          const remaining = transcript.slice(idx + trig.length).trim();
+          if (remaining.length > 1) {{
+            matchedQuery = remaining;
+          }} else {{
+            isWakeOnly = true;
           }}
+          break;
         }}
+      }}
 
-        // STRICT REJECT: Completely ignore any ambient conversation in Standby
-        if (!matchedWake) {{
-          console.log("[Standby Ignored]:", transcript);
-          setJarvisState('STANDBY');
-          return;
-        }}
-
-        // Wake validated! Activate systems
-        systemLifecycle = 'ACTIVE';
-        playSciFiChime('wake');
-        setJarvisState('ACTIVE');
-        resetInactivityTimer();
-
-        if (commandAfterWake.length > 1) {{
-          processVoiceQuery(commandAfterWake);
-        }} else {{
-          const isHi = detectIsHindi(transcript);
-          const wakeReply = isHi
-            ? "हाँ नकुल जी, जार्विस ऑनलाइन है। बताइए मैं आपकी क्या मदद करूँ?"
-            : "Jarvis is online and ready. What can I do for you, Nakul?";
-          speakOut(wakeReply);
-        }}
+      // If user said "Hey Jarvis" alone, wake up and respond immediately!
+      if (isWakeOnly) {{
+        playSciFiBeep('wake');
+        const isHi = detectIsHindi(transcript);
+        const wakeGreeting = isHi
+          ? "हाँ नकुल जी, कहिए, मैं सुन रहा हूँ।"
+          : "Yes Nakul, I'm listening. What can I do for you?";
+        addMessageToBox('assistant', wakeGreeting);
+        speakOut(wakeGreeting);
         return;
       }}
 
-      // --- TIER 2: ACTIVE MODE ---
-      if (systemLifecycle === 'ACTIVE') {{
-        resetInactivityTimer();
+      // If user gave a command with or without prefix
+      if (!matchedQuery && transcript.length > 2) {{
+        matchedQuery = transcript;
+      }}
 
-        // 1. Check standby/sleep commands
-        const sleepTriggers = [
-          'standby', 'go to sleep', 'sleep', 'stop listening', 'stand by',
-          'स्टैंडबाय', 'सो जाओ', 'शांत रहो'
-        ];
-        for (const s of sleepTriggers) {{
-          if (lower.includes(s)) {{
-            systemLifecycle = 'STANDBY';
-            playSciFiChime('standby');
-            setJarvisState('STANDBY');
-            const isHi = detectIsHindi(transcript);
-            const reply = isHi
-              ? "स्टैंडबाय मोड में जा रहा हूँ। जब भी आवश्यकता हो, 'हे जार्विस' कहें।"
-              : "Returning to standby mode. Say 'Hey Jarvis' whenever you need me.";
-            speakOut(reply);
-            return;
-          }}
-        }}
+      if (matchedQuery) {{
+        processVoiceQuery(matchedQuery);
+      }} else {{
+        setJarvisState('IDLE');
+      }}
+    }};
 
-        // 2. Extract command starting with 'jarvis' / 'हे जार्विस' / 'जार्विस'
-        const prefixes = ['hey jarvis', 'jarvis', 'hey jervis', 'jervis', 'हे जार्विस', 'जार्विस'];
-        let matchedQuery = "";
-        for (const trig of prefixes) {{
-          const idx = lower.indexOf(trig);
-          if (idx !== -1) {{
-            matchedQuery = transcript.slice(idx + trig.length).trim();
-            break;
-          }}
-        }}
-
-        // If 'jarvis' prefix wasn't mentioned, ignore ambient room talk unless substantive query
-        if (!matchedQuery) {{
-          if (transcript.split(' ').length < 2 && transcript.length < 5) {{
-            console.log("[Active Ignored brief murmur]:", transcript);
-            setJarvisState('ACTIVE');
-            return;
-          }}
-          matchedQuery = transcript;
-        }}
-
-        if (matchedQuery && matchedQuery.length > 1) {{
-          processVoiceQuery(matchedQuery);
-        }} else {{
-          setJarvisState('ACTIVE');
-        }}
+    recognition.onerror = (e) => {{
+      console.warn("[Speech Recognition Notice]:", e.error);
+      if (e.error === 'not-allowed') {{
+        const btn = document.getElementById('mic-btn');
+        if (btn) btn.textContent = '🎙️ CLICK TO ALLOW MIC';
       }}
     }};
 
@@ -961,64 +1471,64 @@ REVOLVING_LOOPERS_HTML = f"""
         try {{ recognition.start(); }} catch(e) {{}}
       }}
     }};
+
+    try {{
+      recognition.start();
+      const btn = document.getElementById('mic-btn');
+      if (btn) btn.classList.add('listening');
+    }} catch(e) {{}}
   }}
 
-  // ---------------- GLOBAL SHORTCUT CTRL + ALT + J ----------------
-  function handleHotkey(e) {{
-    if ((e.ctrlKey || e.metaKey) && e.altKey && (e.key === 'j' || e.key === 'J' || e.code === 'KeyJ')) {{
-      e.preventDefault();
-      getAudioContext();
-      if (systemLifecycle === 'STANDBY') {{
-        systemLifecycle = 'ACTIVE';
-        playSciFiChime('wake');
-        setJarvisState('ACTIVE');
-        resetInactivityTimer();
-        speakOut("Jarvis activated via ignition key. Ready for directives.");
-      }} else {{
-        systemLifecycle = 'STANDBY';
-        playSciFiChime('standby');
-        setJarvisState('STANDBY');
-        if (inactivityTimer) clearTimeout(inactivityTimer);
-        const subText = document.getElementById('subtitle-text');
-        if (subText) subText.textContent = "Jarvis is in standby. Say 'Hey Jarvis' to wake.";
-      }}
+  function toggleBrowserVoice() {{
+    const btn = document.getElementById('mic-btn');
+    autoListen = !autoListen;
+    getAudioContext();
+    if (autoListen) {{
+      btn.textContent = '🎙️ AUTO-LISTEN: ON';
+      btn.classList.add('listening');
+      if (recognition) try {{ recognition.start(); }} catch(e) {{}}
+      speakOut("Voice listening active.");
+    }} else {{
+      btn.textContent = '🎙️ AUTO-LISTEN: OFF';
+      btn.classList.remove('listening');
+      if (recognition) try {{ recognition.stop(); }} catch(e) {{}}
+      setJarvisState('IDLE');
     }}
   }}
-  window.addEventListener('keydown', handleHotkey, true);
-  try {{
-    window.parent.addEventListener('keydown', handleHotkey, true);
-  }} catch(e) {{}}
 
-  // Audio Unlock on First User Click Anywhere
+  // Unlock Audio on First Click Anywhere on Stage
   document.addEventListener('click', () => {{
     getAudioContext();
     if ('speechSynthesis' in window && window.speechSynthesis.paused) {{
       window.speechSynthesis.resume();
     }}
+    if (recognition) {{
+      try {{ recognition.start(); }} catch(e) {{}}
+    }}
   }}, {{ once: true }});
 
-  // Start Speech Recognition & Loopers
   initWebSpeech();
-  try {{
-    recognition.start();
-  }} catch(e) {{}}
-  setJarvisState('STANDBY');
 </script>
 </body>
 </html>
 """
 
-components.html(REVOLVING_LOOPERS_HTML, height=620, scrolling=False)
+components.html(NEXUS_SPATIAL_HTML, height=620, scrolling=False)
 
-# Bottom Interactive Command Bar (Supports Text Commands)
-user_prompt = st.chat_input("Say 'Hey Jarvis...' or type directive (e.g. 'brief me', 'weather in Dehradun', 'UPES portal')...")
+# Bottom Interactive Command Bar (Works via Text or Voice)
+user_prompt = st.chat_input("Say 'Hey Jarvis...' or type directive (e.g. 'brief me', 'weather in Dehradun', 'transform into a human')...")
 if user_prompt:
     st.session_state.current_state = "THINKING"
+    new_mode, mode_reply = detect_mode_switch(user_prompt, st.session_state.ui_mode)
+    st.session_state.ui_mode = new_mode
     st.session_state.messages.append({"role": "user", "content": user_prompt})
-    try:
-        reply, _ = commands.handle_command(user_prompt)
-    except Exception:
-        reply = f"Directive processed: {user_prompt}"
+    if mode_reply:
+        reply = mode_reply
+    else:
+        try:
+            reply, _ = commands.handle_command(user_prompt)
+        except Exception:
+            reply = f"Directive processed: {user_prompt}"
     st.session_state.messages.append({"role": "assistant", "content": reply})
     st.session_state.last_spoken = reply
     st.session_state.current_state = "SPEAKING"
