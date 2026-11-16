@@ -80,15 +80,13 @@ def _get_offline_whisper():
 # Preload whisper model in background
 threading.Thread(target=_get_offline_whisper, daemon=True).start()
 
-# Recognizer configuration – anti-phantom thresholds
+# Recognizer configuration – fast, high-sensitivity anti-deaf thresholds
 _recognizer = sr.Recognizer()
-_recognizer.energy_threshold = 420.0
-_recognizer.dynamic_energy_threshold = True
-_recognizer.dynamic_energy_adjustment_damping = 0.15
-_recognizer.dynamic_energy_ratio = 1.6
-_recognizer.pause_threshold = 0.55
-_recognizer.phrase_threshold = 0.25
-_recognizer.non_speaking_duration = 0.35
+_recognizer.energy_threshold = 280.0
+_recognizer.dynamic_energy_threshold = False  # Locked after calibration to avoid ambient noise inflation
+_recognizer.pause_threshold = 0.45
+_recognizer.phrase_threshold = 0.15
+_recognizer.non_speaking_duration = 0.30
 
 _mic = sr.Microphone()
 
@@ -101,26 +99,27 @@ SILENCE_HALLUCINATIONS = {
 
 
 def calibrate():
-    """Calibrates microphone for ambient room noise with a safe anti-phantom floor."""
+    """Calibrates microphone for ambient room noise with a safe, sensitive floor."""
     with _mic as source:
         try:
             print("[Jarvis] Calibrating microphone for room noise floor...")
-            _recognizer.adjust_for_ambient_noise(source, duration=0.8)
+            _recognizer.adjust_for_ambient_noise(source, duration=0.6)
             measured = float(_recognizer.energy_threshold)
-            target = max(350.0, min(900.0, measured * 1.35))
+            target = max(180.0, min(420.0, measured * 1.15))
             _recognizer.energy_threshold = target
-            print(f"[Jarvis] Mic calibrated. Energy threshold: {_recognizer.energy_threshold:.0f}")
+            _recognizer.dynamic_energy_threshold = False
+            print(f"[Jarvis] Mic calibrated and locked. Energy threshold: {_recognizer.energy_threshold:.0f}")
         except Exception as e:
-            _recognizer.energy_threshold = 420.0
+            _recognizer.energy_threshold = 280.0
+            _recognizer.dynamic_energy_threshold = False
             print(f"[Jarvis] Mic calibration fallback: {e}")
 
 
 def transcribe_audio(audio: sr.AudioData, language: str = "en-IN") -> str:
     """
-    Fast transcription with strict anti-hallucination filtering.
-    Does NOT use wake-word initial_prompt so Whisper never hallucinates 'Hey Jarvis' on noise.
+    Fast transcription with balanced filtering so 'Hey Jarvis' and Indian accents are never dropped.
     """
-    # 1. Primary: Local Faster-Whisper with Silero VAD & probability gating
+    # 1. Primary: Local Faster-Whisper with Silero VAD
     try:
         model = _get_offline_whisper()
         if model:
@@ -132,14 +131,13 @@ def transcribe_audio(audio: sr.AudioData, language: str = "en-IN") -> str:
                 temperature=0.0,
                 condition_on_previous_text=False,
                 vad_filter=True,
-                vad_parameters=dict(min_silence_duration_ms=300, speech_pad_ms=120),
+                vad_parameters=dict(min_silence_duration_ms=250, speech_pad_ms=150),
             )
             valid_chunks = []
             for s in segments:
-                # Drop segments that Whisper itself flags as likely silence/noise
-                if getattr(s, "no_speech_prob", 0.0) > 0.55:
+                if getattr(s, "no_speech_prob", 0.0) > 0.70:
                     continue
-                if getattr(s, "avg_logprob", 0.0) < -1.05:
+                if getattr(s, "avg_logprob", 0.0) < -1.85:
                     continue
                 chunk = s.text.strip()
                 if chunk and chunk.lower().strip(string.punctuation) not in SILENCE_HALLUCINATIONS:
@@ -157,6 +155,15 @@ def transcribe_audio(audio: sr.AudioData, language: str = "en-IN") -> str:
             return res
     except Exception:
         pass
+
+    # 3. Tertiary fallback: Google Speech API (hi-IN for Hindi/Hinglish)
+    if language != "hi-IN":
+        try:
+            res_hi = _recognizer.recognize_google(audio, language="hi-IN").strip()
+            if res_hi and res_hi.lower().strip(string.punctuation) not in SILENCE_HALLUCINATIONS:
+                return res_hi
+        except Exception:
+            pass
 
     return ""
 
@@ -436,20 +443,22 @@ COLD_WAKE_PATTERNS = [
     "hey jarvis", "hi jarvis", "hello jarvis", "ok jarvis", "okay jarvis",
     "wake up jarvis", "hay jarvis", "hey jervis", "hi jervis", "ok jervis",
     "hey jarvice", "hey jervise", "hey jarves", "hey service", "hey javis",
+    "हे जार्विस", "हे जर्विस", "नमस्ते जार्विस", "सुनो जार्विस", "ए जार्विस",
 ]
 
 # Active-session triggers ("Jarvis <cmd>" works without repeating "Hey")
 ACTIVE_WAKE_PATTERNS = COLD_WAKE_PATTERNS + [
-    "jarvis", "jervis", "jarvice", "jervise", "jarves", "javis", "jarvez"
+    "jarvis", "jervis", "jarvice", "jervise", "jarves", "javis", "jarvez",
+    "जार्विस", "जर्विस"
 ]
 
 STANDBY_PHRASES = {
     "goodbye jarvis", "bye jarvis", "jarvis bye", "jarvis jao", "jao jarvis",
     "go to sleep", "sleep jarvis", "standby", "stand by", "jarvis standby",
-    "stop listening", "shut up jarvis"
+    "stop listening", "shut up jarvis", "सो जाओ", "शांत रहो"
 }
 
-WAKE_TOKENS = {"jarvis", "jervis", "jarvice", "jervise", "jarves", "javis", "jarvez"}
+WAKE_TOKENS = {"jarvis", "jervis", "jarvice", "jervise", "jarves", "javis", "jarvez", "जार्विस", "जर्विस"}
 FUZZY_WAKE_TARGETS = ("jarvis", "jervis", "jarvice", "jervise", "javis")
 
 
@@ -522,10 +531,10 @@ def listen_for_wake_word(session_active: bool = False) -> tuple[bool, str]:
 
     with _mic as source:
         try:
-            _recognizer.pause_threshold = 0.50
-            _recognizer.phrase_threshold = 0.22
-            _recognizer.non_speaking_duration = 0.30
-            audio = _recognizer.listen(source, timeout=1.5, phrase_time_limit=4.5)
+            _recognizer.pause_threshold = 0.45
+            _recognizer.phrase_threshold = 0.15
+            _recognizer.non_speaking_duration = 0.28
+            audio = _recognizer.listen(source, timeout=1.8, phrase_time_limit=5.0)
         except sr.WaitTimeoutError:
             return False, ""
         except Exception:

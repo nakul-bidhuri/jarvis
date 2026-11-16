@@ -1,5 +1,4 @@
-# Jarvis 2.0 Spatial OS — Streamlit Cloud Requirements
-streamlit>=1.35.0
+# Jarvis 2.0 AI Assistant — Desktop Requirements
 google-genai>=1.0.0
 requests>=2.31.0
 numpy>=1.26.0
