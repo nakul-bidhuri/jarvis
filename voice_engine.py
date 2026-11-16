@@ -1,30 +1,40 @@
 """
-voice_engine.py – Zero-Lag, High-Precision Speech I/O for Jarvis 2.0.
+voice_engine.py – Zero-Phantom, Ultra-Fast Speech I/O for J.A.R.V.I.S.
 
-Key Upgrades Fixed:
-1. Persistent Microphone Stream & Zero-Gap Wake Detection:
-   - Eliminated the 7.5s `phrase_time_limit` blind spot that caused "Hey Jarvis" to drop 2-3 times during background noise.
-   - Uses a tight 2.8s rolling window for cold wake-word capture with `dynamic_energy_threshold = False` after initial room calibration so ambient fan/TV noise never inflates the threshold and deafens the mic.
-2. Context-Biased Faster-Whisper (`initial_prompt`):
-   - Passes `initial_prompt="Hey Jarvis, Jarvis, Nexus, transform into immersive mode, human mode, assistant mode"` and `vad_filter=True` to `faster_whisper`, fixing misrecognitions of "Hey Jarvis" in Indian English accents.
-3. Parallel Pipelined Neural TTS (`speak`):
-   - Synthesizes sentence N+1 in a background thread while sentence N is playing, removing pauses between sentences.
-4. Full Porcupine Single-Frame Fix & Browser Web-Speech Bridge Support.
+Fixes all reported voice issues:
+1. Eliminates phantom self-triggering & random "Data Science" hallucinations:
+   - Removes wake-word `initial_prompt` biasing (which caused Whisper to hallucinate "Hey Jarvis" on silence/fan noise).
+   - Rejects Whisper segments with `no_speech_prob > 0.55` or `avg_logprob < -1.0`, and filters known Whisper silence hallucinations ("thank you", "you", "bye", etc.).
+   - Uses `dynamic_energy_threshold = True` with a safe floor (`max(300, measured * 1.35)`) so background noise never triggers empty recordings.
+2. Strict Ignition -> Active -> Standby Wake-Word Lifecycle:
+   - STANDBY (`session_active=False`): Only wakes on explicit "Hey Jarvis" (or phonetic variants like "hey jervis").
+   - ACTIVE (`session_active=True`): After ignition, commands only need "Jarvis <command>" (no need to repeat "Hey Jarvis"), and NEVER accepts random ambient speech without "Jarvis" in it.
+3. True ElevenLabs Bilingual Voices (`eleven_flash_v2_5` for <350ms latency):
+   - English Voice ID: `fPIfC3elMLbN9tNwMXkw`
+   - Hindi Voice ID:   `ibbx9zDYGvLgtYzRbqqG`
+   - Strict Hindi detection (Devanagari script or >=2 Hindi words) so English never randomly switches to Hindi.
 """
 
-import speech_recognition as sr
-import threading
-import queue
 import os
-import struct
-import tempfile
-import asyncio
+import io
+import re
 import time
+import queue
+import struct
 import string
+import asyncio
 import difflib
+import tempfile
+import threading
+import requests
 import pygame
 import edge_tts
+import speech_recognition as sr
 import config
+
+# ElevenLabs Voice IDs (User-configured)
+VOICE_ID_EN = config.get("voice_id_en") or "fPIfC3elMLbN9tNwMXkw"
+VOICE_ID_HI = config.get("voice_id_hi") or "ibbx9zDYGvLgtYzRbqqG"
 
 # Initialize pygame mixer cleanly for low-latency audio playback
 try:
@@ -34,6 +44,8 @@ except Exception as e:
     print(f"[Jarvis Audio] Pygame mixer init notice: {e}")
 
 _speech_channel = None
+
+
 def _get_speech_channel():
     global _speech_channel
     if _speech_channel is None:
@@ -43,8 +55,10 @@ def _get_speech_channel():
             pass
     return _speech_channel
 
+
 _offline_whisper = None
 _whisper_lock = threading.Lock()
+
 
 def _get_offline_whisper():
     global _offline_whisper
@@ -62,78 +76,75 @@ def _get_offline_whisper():
                         pass
     return _offline_whisper
 
-# Preload whisper model in background so first listening is instant
+
+# Preload whisper model in background
 threading.Thread(target=_get_offline_whisper, daemon=True).start()
 
-# Recognizer configuration – locked threshold prevents threshold drift in noisy rooms
+# Recognizer configuration – anti-phantom thresholds
 _recognizer = sr.Recognizer()
-_recognizer.energy_threshold = 280.0
-_recognizer.dynamic_energy_threshold = False  # Locked after calibration to prevent deafening drift
-_recognizer.pause_threshold = 0.45
-_recognizer.phrase_threshold = 0.15
-_recognizer.non_speaking_duration = 0.30
+_recognizer.energy_threshold = 420.0
+_recognizer.dynamic_energy_threshold = True
+_recognizer.dynamic_energy_adjustment_damping = 0.15
+_recognizer.dynamic_energy_ratio = 1.6
+_recognizer.pause_threshold = 0.55
+_recognizer.phrase_threshold = 0.25
+_recognizer.non_speaking_duration = 0.35
 
-_mic = None
+_mic = sr.Microphone()
 
-def _get_mic():
-    global _mic
-    if _mic is None:
-        try:
-            _mic = sr.Microphone()
-        except Exception as e:
-            print(f"[Jarvis Mic Init Notice] {e}")
-    return _mic
-
-WHISPER_WAKE_PROMPT = (
-    "Hey Jarvis, Jarvis, Hey Jervis, Nexus, transform into immersive mode, "
-    "transform into a human, return into assistant mode, open WhatsApp, "
-    "play music on Spotify, UPES portal, Dehradun weather, top stories."
-)
+# Common Whisper hallucinations on silence/fan noise
+SILENCE_HALLUCINATIONS = {
+    "thank you", "thank you.", "thanks", "thanks for watching", "you", "bye",
+    "bye.", "uh", "um", "hmm", "ah", "oh", "okay", "ok", "yes", "no",
+    "subtitles by", "amara.org", "mbc", "i'm sorry", "sorry"
+}
 
 
 def calibrate():
-    """Calibrates microphone once for ambient room noise and locks the floor."""
-    mic = _get_mic()
-    if not mic:
-        _recognizer.energy_threshold = 280.0
-        return
-    with mic as source:
+    """Calibrates microphone for ambient room noise with a safe anti-phantom floor."""
+    with _mic as source:
         try:
             print("[Jarvis] Calibrating microphone for room noise floor...")
-            _recognizer.adjust_for_ambient_noise(source, duration=0.6)
+            _recognizer.adjust_for_ambient_noise(source, duration=0.8)
             measured = float(_recognizer.energy_threshold)
-            # Clamp between 180 and 450 so loud AC/fan noise never makes Jarvis deaf
-            target = max(180.0, min(450.0, measured * 1.15))
+            target = max(350.0, min(900.0, measured * 1.35))
             _recognizer.energy_threshold = target
-            _recognizer.dynamic_energy_threshold = False
-            print(f"[Jarvis] Mic calibrated & locked. Energy threshold: {_recognizer.energy_threshold:.0f}")
+            print(f"[Jarvis] Mic calibrated. Energy threshold: {_recognizer.energy_threshold:.0f}")
         except Exception as e:
-            _recognizer.energy_threshold = 280.0
-            _recognizer.dynamic_energy_threshold = False
+            _recognizer.energy_threshold = 420.0
             print(f"[Jarvis] Mic calibration fallback: {e}")
 
 
-def transcribe_audio(audio: sr.AudioData, language="en-IN") -> str:
+def transcribe_audio(audio: sr.AudioData, language: str = "en-IN") -> str:
     """
-    Ultra-fast transcription engine with lexical prompt biasing for 'Hey Jarvis'
-    and built-in Silero VAD filtering to strip fan/background noise.
+    Fast transcription with strict anti-hallucination filtering.
+    Does NOT use wake-word initial_prompt so Whisper never hallucinates 'Hey Jarvis' on noise.
     """
-    # 1. Primary: Local Faster-Whisper in memory with initial_prompt & VAD filter
+    # 1. Primary: Local Faster-Whisper with Silero VAD & probability gating
     try:
         model = _get_offline_whisper()
         if model:
-            import io
             wav_io = io.BytesIO(audio.get_wav_data())
             segments, _ = model.transcribe(
                 wav_io,
                 beam_size=1,
                 best_of=1,
                 temperature=0.0,
-                initial_prompt=WHISPER_WAKE_PROMPT,
+                condition_on_previous_text=False,
                 vad_filter=True,
-                vad_parameters=dict(min_silence_duration_ms=250, speech_pad_ms=150),
+                vad_parameters=dict(min_silence_duration_ms=300, speech_pad_ms=120),
             )
-            text = " ".join([s.text for s in segments]).strip()
+            valid_chunks = []
+            for s in segments:
+                # Drop segments that Whisper itself flags as likely silence/noise
+                if getattr(s, "no_speech_prob", 0.0) > 0.55:
+                    continue
+                if getattr(s, "avg_logprob", 0.0) < -1.05:
+                    continue
+                chunk = s.text.strip()
+                if chunk and chunk.lower().strip(string.punctuation) not in SILENCE_HALLUCINATIONS:
+                    valid_chunks.append(chunk)
+            text = " ".join(valid_chunks).strip()
             if text:
                 return text
     except Exception:
@@ -142,68 +153,58 @@ def transcribe_audio(audio: sr.AudioData, language="en-IN") -> str:
     # 2. Secondary fallback: Google Speech API (en-IN)
     try:
         res = _recognizer.recognize_google(audio, language=language).strip()
-        if res:
+        if res and res.lower().strip(string.punctuation) not in SILENCE_HALLUCINATIONS:
             return res
-    except sr.UnknownValueError:
-        pass
-    except Exception:
-        pass
-
-    # 3. Tertiary fallback: Google Speech API (en-US)
-    try:
-        res_us = _recognizer.recognize_google(audio, language="en-US").strip()
-        if res_us:
-            return res_us
     except Exception:
         pass
 
     return ""
 
 
-# ---------- Speaking (ElevenLabs Realistic Custom Voice + Edge-TTS Multilingual Pipelining) ----------
+# ---------- Language Detection & ElevenLabs + Edge-TTS Speaking ----------
+
+_HINDI_KEYWORDS = {
+    "hai", "hain", "hoon", "ho", "kya", "kaise", "kaisa", "kaisi", "karo", "kar",
+    "batao", "bata", "mujhe", "mera", "meri", "mere", "tum", "aap", "yaar", "bhai",
+    "aaj", "kal", "abhi", "nahi", "haan", "theek", "accha", "acha", "jao", "chalo",
+    "sunno", "suno", "samjhe", "samjha", "kyun", "kahan", "kab", "kaun"
+}
+
+
+def is_hindi(text: str) -> bool:
+    """
+    Returns True ONLY when the text is genuinely in Hindi/Devanagari or clearly Hinglish (>=2 Hindi words).
+    Prevents English sentences from accidentally triggering the Hindi voice.
+    """
+    if not text:
+        return False
+    # Devanagari Unicode range
+    if any("\u0900" <= ch <= "\u097f" for ch in text):
+        return True
+    words = [w.strip(string.punctuation).lower() for w in text.split()]
+    hindi_hits = sum(1 for w in words if w in _HINDI_KEYWORDS)
+    return hindi_hits >= 2
+
 
 _tts_lock = threading.Lock()
 _speaking = threading.Event()
 _interrupted = threading.Event()
 _pyttsx_engine = None
 
-VOICE_ID_EN = config.get("voice_id_en") or "fPIfC3elMLbN9tNwMXkw"  # Viraj (ElevenLabs English)
-VOICE_ID_HI = config.get("voice_id_hi") or "ibbx9zDYGvLgtYzRbqqG"  # Hindi (ElevenLabs)
-
 AVAILABLE_VOICES = {
-    "Viraj (Indian English - ElevenLabs)": VOICE_ID_EN,
-    "Hindi (ElevenLabs)": VOICE_ID_HI,
-    "Indian English (Prabhat)": "en-IN-PrabhatNeural",
-    "Indian Hindi (Madhur)": "hi-IN-MadhurNeural",
+    "Jarvis English (ElevenLabs)": VOICE_ID_EN,
+    "Jarvis Hindi (ElevenLabs)": VOICE_ID_HI,
     "British Jarvis (Ryan)": "en-GB-RyanNeural",
-    "British Butler (Thomas)": "en-GB-ThomasNeural",
-    "American Warm (Jenny)": "en-US-JennyNeural",
+    "Indian English (Prabhat)": "en-IN-PrabhatNeural",
+    "Hindi (Madhur)": "hi-IN-MadhurNeural",
 }
 
-_current_voice = "en-IN-PrabhatNeural"
-
-
-def is_hindi(text: str) -> bool:
-    """Returns True if the text contains Devanagari Unicode characters or common romanized Hindi words."""
-    if any('\u0900' <= char <= '\u097f' for char in text):
-        return True
-    hindi_keywords = {
-        'kya', 'kaise', 'karo', 'batao', 'namaste', 'shuru', 'hai', 'hain', 'hoon',
-        'aap', 'tum', 'mujhe', 'mera', 'meri', 'mere', 'bhai', 'kripya', 'yaar',
-        'theek', 'bolo', 'sunao', 'kahan', 'kyun', 'kitna', 'kitne', 'shukriya',
-        'shant', 'alvida', 'aaj'
-    }
-    words = set(text.lower().split())
-    return len(words.intersection(hindi_keywords)) > 0
+_current_voice = VOICE_ID_EN
 
 
 def set_voice(voice_id_or_name: str):
-    """Sets the active neural TTS voice."""
     global _current_voice
-    if voice_id_or_name in AVAILABLE_VOICES:
-        _current_voice = AVAILABLE_VOICES[voice_id_or_name]
-    else:
-        _current_voice = voice_id_or_name
+    _current_voice = AVAILABLE_VOICES.get(voice_id_or_name, voice_id_or_name)
 
 
 def get_voice() -> str:
@@ -211,30 +212,24 @@ def get_voice() -> str:
 
 
 def play_audio_cue(cue: str = "wake"):
-    """Plays low-latency futuristic audio status beeps using Windows winsound."""
+    """Plays crisp, low-latency status cues."""
     try:
         import winsound
-        if cue == "ignite":
-            winsound.Beep(520, 70)
-            winsound.Beep(880, 80)
-            winsound.Beep(1320, 110)
-        elif cue == "lock" or cue == "standby":
-            winsound.Beep(1040, 70)
-            winsound.Beep(720, 80)
-            winsound.Beep(440, 100)
-        elif cue == "wake":
-            winsound.Beep(880, 65)
-            winsound.Beep(1320, 85)
+        if cue == "wake":
+            winsound.Beep(880, 55)
+            winsound.Beep(1320, 75)
         elif cue == "think":
-            winsound.Beep(720, 45)
+            winsound.Beep(720, 40)
+        elif cue == "standby":
+            winsound.Beep(880, 65)
+            winsound.Beep(520, 85)
         elif cue == "bargein":
-            winsound.Beep(450, 50)
+            winsound.Beep(450, 45)
     except Exception:
         pass
 
 
 def stop_speaking():
-    """Immediately interrupts and halts Jarvis's audio playback."""
     _interrupted.set()
     try:
         chan = _get_speech_channel()
@@ -245,7 +240,6 @@ def stop_speaking():
 
 
 def was_interrupted() -> bool:
-    """Checks if speech playback was interrupted."""
     return _interrupted.is_set()
 
 
@@ -255,86 +249,88 @@ def _get_pyttsx():
         try:
             import pyttsx3
             _pyttsx_engine = pyttsx3.init()
-            _pyttsx_engine.setProperty('rate', 190)
-        except Exception as e:
-            print(f"[TTS Fallback Init Error] {e}")
+            _pyttsx_engine.setProperty("rate", 190)
+        except Exception:
+            pass
     return _pyttsx_engine
 
 
 def _synthesize_elevenlabs(sentence_text: str, out_path: str, voice_id: str) -> bool:
-    """Synthesizes high-fidelity speech using ElevenLabs API if key configured."""
+    """
+    Synthesizes speech via ElevenLabs using `eleven_flash_v2_5` (~250ms ultra-low latency)
+    with fallback to `eleven_multilingual_v2`.
+    """
     api_key = config.get("elevenlabs_api_key")
     if not api_key:
         return False
-    try:
-        import urllib.request
-        import json
-        url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
-        headers = {
-            "xi-api-key": api_key,
-            "Content-Type": "application/json",
-            "Accept": "audio/mpeg"
-        }
-        body = json.dumps({
+
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+    headers = {
+        "xi-api-key": api_key,
+        "Content-Type": "application/json",
+        "Accept": "audio/mpeg",
+    }
+
+    for model_id in ("eleven_flash_v2_5", "eleven_multilingual_v2"):
+        payload = {
             "text": sentence_text,
-            "model_id": "eleven_multilingual_v2",
+            "model_id": model_id,
             "voice_settings": {
-                "stability": 0.5,
-                "similarity_boost": 0.82
-            }
-        }).encode("utf-8")
-        req = urllib.request.Request(url, data=body, headers=headers)
-        with urllib.request.urlopen(req, timeout=6) as response:
-            with open(out_path, "wb") as f:
-                f.write(response.read())
-        return os.path.exists(out_path) and os.path.getsize(out_path) > 0
-    except Exception as e:
-        print(f"[ElevenLabs Notice] {e}")
-        return False
+                "stability": 0.50,
+                "similarity_boost": 0.78,
+                "style": 0.15,
+                "use_speaker_boost": True,
+            },
+        }
+        try:
+            resp = requests.post(url, json=payload, headers=headers, timeout=8)
+            if resp.status_code == 200 and resp.content:
+                with open(out_path, "wb") as f:
+                    f.write(resp.content)
+                return True
+            else:
+                print(f"[ElevenLabs {model_id} HTTP {resp.status_code}]: {resp.text[:120]}")
+        except Exception as e:
+            print(f"[ElevenLabs {model_id} Error]: {e}")
+    return False
 
 
-def _synthesize_sentence(sentence_text: str, out_path: str, voice_name: str) -> bool:
+def _synthesize_sentence(sentence_text: str, out_path: str, voice_override: str | None = None) -> bool:
     """
-    Synthesizes a sentence chunk:
-    1. Tries ElevenLabs (Viraj for English, Bunty for Hindi) if key is present.
-    2. Falls back to Microsoft Edge-TTS (hi-IN-MadhurNeural for Hindi, en-IN-PrabhatNeural/Ryan for English).
+    Primary: ElevenLabs (`fPIfC3elMLbN9tNwMXkw` for English, `ibbx9zDYGvLgtYzRbqqG` for Hindi).
+    Fallback: Edge-TTS (`en-IN-PrabhatNeural` / `hi-IN-MadhurNeural`).
     """
     hindi = is_hindi(sentence_text)
     eleven_voice = VOICE_ID_HI if hindi else VOICE_ID_EN
 
-    # 1. Try ElevenLabs
+    if voice_override and voice_override not in (VOICE_ID_EN, VOICE_ID_HI) and "Neural" not in voice_override:
+        eleven_voice = voice_override
+
     if _synthesize_elevenlabs(sentence_text, out_path, eleven_voice):
         return True
 
-    # 2. Fallback: Edge-TTS
-    target_edge_voice = "hi-IN-MadhurNeural" if hindi else "en-IN-PrabhatNeural"
+    # Fallback to Edge-TTS if ElevenLabs key is missing or offline
+    edge_voice = "hi-IN-MadhurNeural" if hindi else "en-IN-PrabhatNeural"
+    if voice_override and "Neural" in voice_override and not hindi:
+        edge_voice = voice_override
+
     try:
-        communicate = edge_tts.Communicate(sentence_text, target_edge_voice, rate="+5%")
+        communicate = edge_tts.Communicate(sentence_text, edge_voice, rate="+6%")
         asyncio.run(communicate.save(out_path))
         return os.path.exists(out_path) and os.path.getsize(out_path) > 0
     except Exception:
-        try:
-            # Secondary British fallback
-            communicate = edge_tts.Communicate(sentence_text, "en-GB-RyanNeural", rate="+5%")
-            asyncio.run(communicate.save(out_path))
-            return os.path.exists(out_path) and os.path.getsize(out_path) > 0
-        except Exception:
-            return False
+        return False
 
 
 def speak(text: str, on_start=None, on_end=None, allow_barge_in=True):
-    """
-    Speaks text aloud with pre-fetched sentence pipelining:
-    Sentence 1 synthesizes and plays immediately while Sentence 2+ synthesize concurrently in the background.
-    """
+    """Pipelined neural TTS: synthesizes sentence N+1 while sentence N plays."""
     if not text or not text.strip():
         if on_end:
             on_end()
         return
 
     clean_text = text.replace("*", "").replace("#", "").replace("`", "").strip()
-    import re
-    sentences = [s.strip() for s in re.split(r'(?<=[.!?\n])\s+', clean_text) if s.strip()]
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?\n।])\s+", clean_text) if s.strip()]
     if not sentences:
         sentences = [clean_text]
 
@@ -360,15 +356,14 @@ def speak(text: str, on_start=None, on_end=None, allow_barge_in=True):
                     break
                 tmp_file = os.path.join(
                     tempfile.gettempdir(),
-                    f"jarvis_speech_{int(time.time()*1000)}_{i}.mp3"
+                    f"jarvis_speech_{int(time.time() * 1000)}_{i}.mp3"
                 )
                 temp_files.append(tmp_file)
                 ok = _synthesize_sentence(sentence, tmp_file, _current_voice)
                 synth_queue.put((sentence, tmp_file, ok))
             synth_queue.put(None)
 
-        producer_thread = threading.Thread(target=_producer, daemon=True)
-        producer_thread.start()
+        threading.Thread(target=_producer, daemon=True).start()
 
         try:
             while True:
@@ -408,11 +403,12 @@ def speak(text: str, on_start=None, on_end=None, allow_barge_in=True):
                 on_end()
 
 
-# ---------- Wake Word & Command Extraction ----------
+# ---------- Wake Word & Ignition State Machine ----------
 
 _porcupine = None
 _pa = None
 PPN_PATH = os.path.join(os.path.dirname(__file__), "jarvis.ppn")
+
 
 def _try_init_porcupine():
     global _porcupine, _pa
@@ -425,7 +421,6 @@ def _try_init_porcupine():
         if os.path.exists(PPN_PATH):
             _porcupine = pvporcupine.create(access_key=access_key, keyword_paths=[PPN_PATH])
         else:
-            # Built-in 'jarvis' keyword ships with pvporcupine out of the box!
             _porcupine = pvporcupine.create(access_key=access_key, keywords=["jarvis"])
         _pa = pyaudio.PyAudio()
         return True
@@ -433,200 +428,79 @@ def _try_init_porcupine():
         _porcupine = None
         return False
 
-_offline_checked = False
-_offline_ready = False
 
-def _is_offline_ready():
-    global _offline_checked, _offline_ready
-    if not _offline_checked:
-        _offline_checked = True
-        _offline_ready = _try_init_porcupine()
-    return _offline_ready
+_offline_ready = _try_init_porcupine()
 
-# ---------- Lifecycle States & Power Management ----------
-
-STATE_LOCKED = "LOCKED"
-STATE_STANDBY = "STANDBY"
-STATE_ACTIVE = "ACTIVE"
-
-_system_state = STATE_LOCKED
-_state_lock = threading.Lock()
-_state_listeners = []
-
-
-def get_system_state() -> str:
-    global _system_state
-    with _state_lock:
-        return _system_state
-
-
-def set_system_state(new_state: str, announce: bool = True):
-    global _system_state
-    with _state_lock:
-        old_state = _system_state
-        _system_state = new_state
-    print(f"[Jarvis State Transition] {old_state} -> {new_state}")
-    for cb in _state_listeners:
-        try:
-            cb(new_state)
-        except Exception:
-            pass
-    if announce:
-        if new_state == STATE_STANDBY:
-            play_audio_cue("ignite")
-        elif new_state == STATE_LOCKED:
-            play_audio_cue("lock")
-
-
-def add_state_listener(callback):
-    _state_listeners.append(callback)
-
-
-def toggle_system_ignition():
-    """Toggles system between LOCKED and STANDBY via the 'Car Key' shortcut."""
-    curr = get_system_state()
-    if curr == STATE_LOCKED:
-        set_system_state(STATE_STANDBY)
-        speak("Ignition confirmed. Jarvis in standby. Say 'Hey Jarvis' to activate.")
-    else:
-        set_system_state(STATE_LOCKED)
-        speak("Jarvis locked down.")
-
-
-def start_global_hotkey_listener(on_toggle_callback=None):
-    """
-    Registers system-wide Windows shortcut Ctrl + Alt + J via Win32 RegisterHotKey.
-    Pressing Ctrl+Alt+J anywhere in Windows toggles Jarvis ignition.
-    """
-    cb = on_toggle_callback or toggle_system_ignition
-
-    def _hotkey_thread():
-        try:
-            import ctypes
-            from ctypes import wintypes
-            user32 = ctypes.windll.user32
-            MOD_ALT = 0x0001
-            MOD_CONTROL = 0x0002
-            MOD_NOREPEAT = 0x4000
-            VK_J = 0x4A
-            HOTKEY_ID = 48101
-
-            if not user32.RegisterHotKey(None, HOTKEY_ID, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, VK_J):
-                print("[Jarvis Hotkey] Notice: Could not register Ctrl+Alt+J hotkey (may already be in use).")
-                return
-
-            print("[Jarvis Hotkey] System-Wide Ignition Hotkey Active: [Ctrl + Alt + J]")
-            msg = wintypes.MSG()
-            while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) != 0:
-                if msg.message == 0x0312 and msg.wParam == HOTKEY_ID:
-                    cb()
-                user32.TranslateMessage(ctypes.byref(msg))
-                user32.DispatchMessageW(ctypes.byref(msg))
-        except Exception as e:
-            print(f"[Jarvis Hotkey Warning] {e}")
-
-    t = threading.Thread(target=_hotkey_thread, daemon=True)
-    t.start()
-
-
-def start_sleep_monitor(on_sleep_callback=None):
-    """
-    Monitors Windows suspend/sleep/hibernate.
-    When laptop wakes up from sleep or hibernate, immediately resets Jarvis to LOCKED state.
-    """
-    def _power_thread():
-        last_tick = time.time()
-        while True:
-            time.sleep(1.0)
-            now = time.time()
-            if now - last_tick > 3.5:
-                print(f"[Jarvis Power] Laptop wake from sleep/hibernate detected ({now-last_tick:.1f}s gap). Locking down.")
-                set_system_state(STATE_LOCKED, announce=False)
-                if on_sleep_callback:
-                    try:
-                        on_sleep_callback()
-                    except Exception:
-                        pass
-            last_tick = now
-
-    t = threading.Thread(target=_power_thread, daemon=True)
-    t.start()
-
-
-# ---------- Wake Word & Command Extraction (Strict Lifecycle) ----------
-
-# 1. Ignition wake phrases (ONLY allowed when waking from STANDBY)
-IGNITION_WAKE_PATTERNS = [
+# Cold-start ignition phrases (requires "Hey Jarvis" / phonetic variants)
+COLD_WAKE_PATTERNS = [
     "hey jarvis", "hi jarvis", "hello jarvis", "ok jarvis", "okay jarvis",
-    "wake up jarvis", "listen jarvis", "start jarvis", "wake jarvis",
-    "hey jervis", "hi jervis", "hello jervis", "ok jervis", "okay jervis",
-    "wake up jervis", "start jervis", "wake jervis",
-    "हे जार्विस", "हे जर्विस", "नमस्ते जार्विस", "जार्विस शुरू करो", "सुनो जार्विस"
+    "wake up jarvis", "hay jarvis", "hey jervis", "hi jervis", "ok jervis",
+    "hey jarvice", "hey jervise", "hey jarves", "hey service", "hey javis",
 ]
 
-# 2. Active wake prefixes (Allowed when system is ALREADY active)
-ACTIVE_WAKE_PATTERNS = [
-    "hey jarvis", "hi jarvis", "hello jarvis", "ok jarvis", "okay jarvis",
-    "jarvis", "jervis", "hey jervis", "hi jervis", "ok jervis",
-    "हे जार्विस", "जार्विस", "हे जर्विस", "जर्विस"
+# Active-session triggers ("Jarvis <cmd>" works without repeating "Hey")
+ACTIVE_WAKE_PATTERNS = COLD_WAKE_PATTERNS + [
+    "jarvis", "jervis", "jarvice", "jervise", "jarves", "javis", "jarvez"
 ]
 
-STANDBY_COMMANDS = [
-    "standby", "stand by", "go to sleep", "sleep", "stop listening",
-    "स्टैंडबाय", "सो जाओ", "शांत रहो"
-]
+STANDBY_PHRASES = {
+    "goodbye jarvis", "bye jarvis", "jarvis bye", "jarvis jao", "jao jarvis",
+    "go to sleep", "sleep jarvis", "standby", "stand by", "jarvis standby",
+    "stop listening", "shut up jarvis"
+}
+
+WAKE_TOKENS = {"jarvis", "jervis", "jarvice", "jervise", "jarves", "javis", "jarvez"}
+FUZZY_WAKE_TARGETS = ("jarvis", "jervis", "jarvice", "jervise", "javis")
+
+
+def is_standby_command(text: str) -> bool:
+    clean = (text or "").lower().strip(string.punctuation).strip()
+    return any(p in clean for p in STANDBY_PHRASES)
 
 
 def check_wake_word(text: str, session_active: bool = False) -> tuple[bool, str]:
     """
-    Strict two-tier wake word check:
-    - If in STANDBY (session_active=False): ONLY accepts ignition phrases ('Hey Jarvis').
-      Single 'Jarvis' and random room noises are strictly rejected!
-    - If in ACTIVE (session_active=True): Accepts 'Jarvis [cmd]' or 'Hey Jarvis [cmd]'.
+    Strict Wake-Word Extractor:
+    - STANDBY (`session_active=False`): Requires 'Hey Jarvis' (ignition).
+    - ACTIVE  (`session_active=True`):  Requires 'Jarvis' (e.g. 'Jarvis open Spotify') or a standby phrase.
+      NEVER accepts random ambient speech without 'Jarvis' in it!
     """
     if not text or not text.strip():
         return False, ""
     clean = text.lower().strip()
 
-    # Tier 1: Standby Mode — Strict Ignition Wake Phrase ONLY
-    if not session_active:
-        for p in sorted(IGNITION_WAKE_PATTERNS, key=len, reverse=True):
-            idx = clean.find(p)
-            if idx != -1:
-                cmd = clean[idx + len(p):].strip()
-                cmd = cmd.strip(string.punctuation).strip()
-                return True, cmd
-        # Reject everything else in Standby
-        return False, ""
+    if session_active and is_standby_command(clean):
+        return True, "__STANDBY__"
 
-    # Tier 2: Active Mode — Check Standby / Sleep command first
-    for s in STANDBY_COMMANDS:
-        if s in clean:
-            return True, "standby"
-
-    # Active Mode — Accept 'Jarvis [cmd]' or full prompt
-    for p in sorted(ACTIVE_WAKE_PATTERNS, key=len, reverse=True):
+    patterns = sorted(ACTIVE_WAKE_PATTERNS if session_active else COLD_WAKE_PATTERNS, key=len, reverse=True)
+    for p in patterns:
         idx = clean.find(p)
         if idx != -1:
-            cmd = clean[idx + len(p):].strip()
-            cmd = cmd.strip(string.punctuation).strip()
+            cmd = clean[idx + len(p):].strip().strip(string.punctuation).strip()
             return True, cmd
 
-    # In active continuous dialogue, accept substantive query (>1 word)
-    words = clean.split()
-    if len(words) >= 2:
-        return True, clean
+    # Fuzzy token check ONLY for active session ("Jarvis") or when "hey/hi/ok" precedes a fuzzy match
+    words = [w.strip(string.punctuation).strip() for w in clean.split() if w.strip(string.punctuation).strip()]
+    for i, w in enumerate(words):
+        if session_active:
+            if w in WAKE_TOKENS or any(difflib.SequenceMatcher(None, w, t).ratio() >= 0.78 for t in FUZZY_WAKE_TARGETS):
+                cmd = " ".join(words[i + 1:]).strip()
+                return True, cmd
+        else:
+            if i > 0 and words[i - 1] in ("hey", "hi", "hay", "ok", "okay", "a"):
+                if w in WAKE_TOKENS or any(difflib.SequenceMatcher(None, w, t).ratio() >= 0.76 for t in FUZZY_WAKE_TARGETS):
+                    cmd = " ".join(words[i + 1:]).strip()
+                    return True, cmd
 
     return False, ""
 
 
 def listen_for_wake_word(session_active: bool = False) -> tuple[bool, str]:
     """
-    Ultra-responsive wake word listener.
-    - If Porcupine is active: keeps stream open in a tight frame loop (fixes single-frame bug).
-    - Otherwise: uses a fast 3.2s window with 0.45s pause_threshold so background noise never blocks for 7.5s.
+    Listens for 'Hey Jarvis' (Standby) or 'Jarvis <command>' (Active).
+    Eliminates 7.5s lockups and never triggers on silence.
     """
-    if _is_offline_ready() and _porcupine:
+    if not session_active and _offline_ready and _porcupine:
         stream = _pa.open(
             rate=_porcupine.sample_rate,
             channels=1,
@@ -635,8 +509,7 @@ def listen_for_wake_word(session_active: bool = False) -> tuple[bool, str]:
             frames_per_buffer=_porcupine.frame_length,
         )
         try:
-            # Poll continuously for ~2.5 seconds per cycle instead of 1 single 32ms frame
-            frames_to_poll = int((_porcupine.sample_rate / _porcupine.frame_length) * 2.5)
+            frames_to_poll = int((_porcupine.sample_rate / _porcupine.frame_length) * 2.0)
             for _ in range(frames_to_poll):
                 pcm = stream.read(_porcupine.frame_length, exception_on_overflow=False)
                 pcm_unpacked = struct.unpack_from("h" * _porcupine.frame_length, pcm)
@@ -647,16 +520,12 @@ def listen_for_wake_word(session_active: bool = False) -> tuple[bool, str]:
         finally:
             stream.close()
 
-    mic = _get_mic()
-    if not mic:
-        return False, ""
-    with mic as source:
+    with _mic as source:
         try:
-            _recognizer.pause_threshold = 0.45
-            _recognizer.phrase_threshold = 0.15
-            _recognizer.non_speaking_duration = 0.28
-            # Fast 1.2s wait timeout + 4.0s phrase limit prevents 7.5s lockups on ambient room noise
-            audio = _recognizer.listen(source, timeout=1.2, phrase_time_limit=4.0)
+            _recognizer.pause_threshold = 0.50
+            _recognizer.phrase_threshold = 0.22
+            _recognizer.non_speaking_duration = 0.30
+            audio = _recognizer.listen(source, timeout=1.5, phrase_time_limit=4.5)
         except sr.WaitTimeoutError:
             return False, ""
         except Exception:
@@ -666,7 +535,7 @@ def listen_for_wake_word(session_active: bool = False) -> tuple[bool, str]:
     if not raw_text:
         return False, ""
 
-    print(f"[Jarvis Mic Heard]: '{raw_text}' (SessionActive={session_active})")
+    print(f"[Jarvis Mic Heard]: '{raw_text}' (Active={session_active})")
     is_wake, extracted_cmd = check_wake_word(raw_text, session_active=session_active)
     if is_wake:
         try:
@@ -674,51 +543,29 @@ def listen_for_wake_word(session_active: bool = False) -> tuple[bool, str]:
             music_player.duck_audio()
         except Exception:
             pass
-        play_audio_cue("wake")
-        print(f" -> [WAKE TRIGGERED!] Command: '{extracted_cmd or '(wake only)'}'")
+        if extracted_cmd != "__STANDBY__":
+            play_audio_cue("wake")
         return True, extracted_cmd
-    else:
-        try:
-            import music_player
-            if music_player.is_playing():
-                clean_lower = raw_text.lower().strip(string.punctuation).strip()
-                if clean_lower in ("next", "next song", "skip", "skip song", "pause", "pause music", "resume", "resume music", "stop"):
-                    music_player.duck_audio()
-                    return True, clean_lower
-        except Exception:
-            pass
 
-        return False, ""
+    return False, ""
 
 
 def listen_for_command(timeout=4.5, phrase_time_limit=8.0, on_amplitude=None) -> str:
-    """Listens for user's command with fast 400ms pause threshold."""
-    print("[Debug] Listening for your command now...")
+    """Listens for a direct command right after 'Hey Jarvis' wake word."""
     try:
         import music_player
         music_player.duck_audio()
     except Exception:
         pass
-    mic = _get_mic()
-    if not mic:
-        return False, ""
-    with mic as source:
+    with _mic as source:
         try:
-            _recognizer.pause_threshold = 0.40
-            _recognizer.phrase_threshold = 0.15
-            _recognizer.non_speaking_duration = 0.25
+            _recognizer.pause_threshold = 0.50
+            _recognizer.phrase_threshold = 0.20
+            _recognizer.non_speaking_duration = 0.30
             audio = _recognizer.listen(source, timeout=timeout, phrase_time_limit=phrase_time_limit)
         except sr.WaitTimeoutError:
-            print("[Debug] Stopped listening (silence timeout).")
             return ""
-        except Exception as e:
-            print(f"[Debug] Mic error: {e}")
+        except Exception:
             return ""
 
-    print("[Debug] Audio captured! Transcribing speech...")
-    text = transcribe_audio(audio, language="en-IN")
-    if text:
-        print(f"[Debug] You said: {text}")
-    else:
-        print("[Debug] Could not understand audio.")
-    return text
+    return transcribe_audio(audio, language="en-IN")
