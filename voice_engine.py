@@ -167,12 +167,12 @@ _speaking = threading.Event()
 _interrupted = threading.Event()
 _pyttsx_engine = None
 
-VOICE_ID_EN = config.get("voice_id_en") or "fPIfC3elMLbN9tNwMXkw"  # Viraj (ElevenLabs)
-VOICE_ID_HI = config.get("voice_id_hi") or "7qBNUtXRGP0jPi0H4r8k"  # Bunty (ElevenLabs)
+VOICE_ID_EN = config.get("voice_id_en") or "fPIfC3elMLbN9tNwMXkw"  # Viraj (ElevenLabs English)
+VOICE_ID_HI = config.get("voice_id_hi") or "ibbx9zDYGvLgtYzRbqqG"  # Hindi (ElevenLabs)
 
 AVAILABLE_VOICES = {
     "Viraj (Indian English - ElevenLabs)": VOICE_ID_EN,
-    "Bunty (Indian Hindi - ElevenLabs)": VOICE_ID_HI,
+    "Hindi (ElevenLabs)": VOICE_ID_HI,
     "Indian English (Prabhat)": "en-IN-PrabhatNeural",
     "Indian Hindi (Madhur)": "hi-IN-MadhurNeural",
     "British Jarvis (Ryan)": "en-GB-RyanNeural",
@@ -184,8 +184,17 @@ _current_voice = "en-IN-PrabhatNeural"
 
 
 def is_hindi(text: str) -> bool:
-    """Returns True if the text contains Devanagari Unicode characters."""
-    return any('\u0900' <= char <= '\u097f' for char in text)
+    """Returns True if the text contains Devanagari Unicode characters or common romanized Hindi words."""
+    if any('\u0900' <= char <= '\u097f' for char in text):
+        return True
+    hindi_keywords = {
+        'kya', 'kaise', 'karo', 'batao', 'namaste', 'shuru', 'hai', 'hain', 'hoon',
+        'aap', 'tum', 'mujhe', 'mera', 'meri', 'mere', 'bhai', 'kripya', 'yaar',
+        'theek', 'bolo', 'sunao', 'kahan', 'kyun', 'kitna', 'kitne', 'shukriya',
+        'shant', 'alvida', 'aaj'
+    }
+    words = set(text.lower().split())
+    return len(words.intersection(hindi_keywords)) > 0
 
 
 def set_voice(voice_id_or_name: str):

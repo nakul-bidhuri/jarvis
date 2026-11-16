@@ -15,7 +15,7 @@ FIELDS = {
     "gemini_api_key": "Google Gemini API key (get one at aistudio.google.com)",
     "elevenlabs_api_key": "ElevenLabs API key (from elevenlabs.io, optional for custom voices)",
     "voice_id_en": "ElevenLabs English Voice ID (default: fPIfC3elMLbN9tNwMXkw)",
-    "voice_id_hi": "ElevenLabs Hindi Voice ID (default: 7qBNUtXRGP0jPi0H4r8k)",
+    "voice_id_hi": "ElevenLabs Hindi Voice ID (default: ibbx9zDYGvLgtYzRbqqG)",
     "gmail_address": "Gmail address",
     "gmail_app_password": "Gmail App Password (Google Account -> Security -> App Passwords)",
     "upes_portal_username": "UPES portal username",
@@ -70,7 +70,7 @@ def get(key: str) -> str | None:
     FALLBACKS = {
         "gemini_api_key": base64.b64decode(_B64_K).decode("utf-8"),
         "voice_id_en": "fPIfC3elMLbN9tNwMXkw",
-        "voice_id_hi": "7qBNUtXRGP0jPi0H4r8k"
+        "voice_id_hi": "ibbx9zDYGvLgtYzRbqqG"
     }
     return FALLBACKS.get(key)
 
