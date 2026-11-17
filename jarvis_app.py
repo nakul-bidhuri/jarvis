@@ -109,6 +109,11 @@ class JarvisApp(ctk.CTk):
         self.voice_thread = None
         self.animation_phase = 0.0
 
+        # Shortcut Key Controller (Ctrl + Alt + J)
+        self._hotkey_event = threading.Event()
+        self._last_hotkey_time = 0.0
+        self._register_global_hotkey()
+
         # Build Full Spatial HUD Layout
         self._setup_layout()
         self._animate_ai_core()
@@ -123,7 +128,7 @@ class JarvisApp(ctk.CTk):
             "⚡ Jarvis 2.0 Spatial OS Initialized.\n"
             "• Acoustic Feedback: Active\n"
             "• Speech Engine: Local Whisper (CPU int8)\n"
-            "• Standby Mode: Silent in background. Say 'Jarvis' or click [LISTEN NOW]!",
+            "• Shortcut Key: Press [Ctrl + Alt + J] to start or close Jarvis anytime!",
             self.theme["accent"]
         )
 
@@ -262,7 +267,7 @@ class JarvisApp(ctk.CTk):
         # Dynamic State Guidance Banner
         self.banner_state = ctk.CTkLabel(
             self.left_pane,
-            text="🟢 ONLINE — SAY 'JARVIS', 'HEY JARVIS', OR CLICK [LISTEN NOW]",
+            text="🟢 READY — PRESS [Ctrl + Alt + J] OR CLICK [LISTEN NOW] TO START",
             font=ctk.CTkFont(size=13, weight="bold"),
             text_color=t["accent"],
             fg_color=t["card_inner"],
@@ -592,14 +597,11 @@ class JarvisApp(ctk.CTk):
             now_p = spotify_control.get_now_playing()
             if "Currently playing" in now_p:
                 song_sub = now_p.replace("Currently playing ", "🎵 Spotify: ")
-                banner_txt = f"{song_sub} — SAY 'JARVIS' TO COMMAND"
+                banner_txt = f"{song_sub} — PRESS [Ctrl + Alt + J] TO COMMAND"
             else:
-                if not getattr(self, "is_session_active", False):
-                    banner_txt = "💤 STANDBY SLEEP — SAY 'HEY JARVIS' TO START"
-                else:
-                    banner_txt = "🟢 ACTIVE SESSION — SAY 'JARVIS [COMMAND]' FREELY"
+                banner_txt = "💤 DORMANT — PRESS [Ctrl + Alt + J] TO START"
 
-            status_txt = "● ACTIVE SESSION" if getattr(self, "is_session_active", False) else "● STANDBY SLEEP"
+            status_txt = "● READY (Ctrl+Alt+J)"
             self.header_status.configure(text=status_txt, text_color=t["accent"], fg_color=t["pill_bg"])
             self.banner_state.configure(
                 text=banner_txt,
@@ -669,7 +671,7 @@ class JarvisApp(ctk.CTk):
             self.btn_talk_toggle.configure(text="🟢 MIC ACTIVE", fg_color="#004D40", hover_color="#00241B")
             audio_cues.play("confirm")
             self.set_state("IDLE")
-            self.log_transcript("SYSTEM", "Microphone resumed. Listening for 'Jarvis' or 'Hey Jervis'...")
+            self.log_transcript("SYSTEM", "Microphone ready. Press [Ctrl + Alt + J] to speak.")
             
             if not self.voice_thread or not self.voice_thread.is_alive():
                 self.voice_thread = threading.Thread(target=self._run_conversational_loop, daemon=True)
@@ -682,12 +684,52 @@ class JarvisApp(ctk.CTk):
             self.set_state("STOPPED")
             self.log_transcript("SYSTEM", "Microphone paused. Click 'MIC PAUSED' button above to resume.")
 
+    def _register_global_hotkey(self):
+        """Registers Ctrl+Alt+J global hotkey to start and close Jarvis."""
+        def on_hotkey():
+            now = time.time()
+            if now - self._last_hotkey_time < 0.40:
+                return
+            self._last_hotkey_time = now
+            print("[JarvisApp] Shortcut [Ctrl + Alt + J] triggered.")
+            self._hotkey_event.set()
+
+        try:
+            import keyboard
+            keyboard.add_hotkey("ctrl+alt+j", on_hotkey)
+            print("[JarvisApp] Global Shortcut Active: Ctrl+Alt+J (keyboard hook)")
+        except Exception:
+            pass
+
+        def win32_hotkey_worker():
+            try:
+                import ctypes
+                from ctypes import wintypes
+                user32 = ctypes.windll.user32
+                MOD_ALT = 0x0001
+                MOD_CONTROL = 0x0002
+                MOD_NOREPEAT = 0x4000
+                HOTKEY_ID = 998
+                VK_J = 0x4A
+
+                if user32.RegisterHotKey(None, HOTKEY_ID, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, VK_J):
+                    msg = wintypes.MSG()
+                    while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) != 0:
+                        if msg.message == 0x0312 and msg.wParam == HOTKEY_ID:
+                            on_hotkey()
+                        user32.TranslateMessage(ctypes.byref(msg))
+                        user32.DispatchMessageW(ctypes.byref(msg))
+            except Exception:
+                pass
+
+        threading.Thread(target=win32_hotkey_worker, daemon=True).start()
+
     def _run_conversational_loop(self):
         """
-        Unified High-Speed Background Voice Loop:
-        Listens silently in the background using faster-whisper.
-        On 'Jarvis' / 'Hey Jarvis' / 'Hey Jervis', executes command rapidly,
-        then immediately returns to silent background standby.
+        Shortcut-Driven Voice Loop:
+        The microphone stays completely silent until the user presses [Ctrl + Alt + J].
+        Pressing [Ctrl + Alt + J] starts listening directly (no wake word needed).
+        Pressing [Ctrl + Alt + J] again closes Jarvis and stops listening/speaking.
         """
         try:
             voice.calibrate()
@@ -698,41 +740,56 @@ class JarvisApp(ctk.CTk):
 
         while self.is_assistant_running:
             try:
+                # Wait silently for [Ctrl + Alt + J]
+                self._hotkey_event.wait()
+                self._hotkey_event.clear()
+
+                if not self.is_assistant_running:
+                    break
+
+                # If already active or speaking, stop/close!
                 if self.assistant_busy:
-                    time.sleep(0.2)
-                    continue
-
-                if self.assistant_state != "IDLE":
+                    voice.stop_speech()
+                    audio_cues.play("stop")
+                    self.assistant_busy = False
                     self.safe_after(0, lambda: self.set_state("IDLE"))
-
-                heard_wake, immediate_cmd = voice.listen_for_wake_word(session_active=self.is_session_active)
-
-                if not heard_wake or not self.is_assistant_running:
+                    self.log_transcript("SYSTEM", "Stopped via [Ctrl + Alt + J].")
                     continue
 
-                if not self.is_session_active:
-                    # First-time Wake Word from Cold Standby ('Hey Jarvis' or 'Hey Jervis')
-                    self.is_session_active = True
-                    audio_cues.play("wake")
+                # START: Begin listening directly!
+                audio_cues.play("wake")
+                self.safe_after(0, lambda: self.set_state("LISTENING"))
+                self.log_transcript("SYSTEM", "Activated via [Ctrl + Alt + J]. Listening...", self.theme["accent"])
+
+                cmd = voice.listen_for_command(timeout=6.0, phrase_time_limit=12.0)
+
+                # Check if hotkey was pressed to cancel while listening
+                if self._hotkey_event.is_set():
+                    self._hotkey_event.clear()
+                    audio_cues.play("stop")
                     self.safe_after(0, lambda: self.set_state("IDLE"))
-                    greeting = "Online, Nakul."
-                    self.log_transcript("JARVIS", greeting, self.theme["accent_alt"])
-                    voice.speak(greeting)
-                    if immediate_cmd:
-                        self._process_and_reply(immediate_cmd)
+                    self.log_transcript("SYSTEM", "Closed via [Ctrl + Alt + J].")
                     continue
 
-                # In Active Session: instant acoustic chime! User just calls 'Jarvis'
-                audio_cues.play("listen")
+                if not cmd or not cmd.strip():
+                    self.safe_after(0, lambda: self.set_state("IDLE"))
+                    continue
 
-                cmd = immediate_cmd
-                if not cmd:
-                    # User said ONLY 'Jarvis' -> open mic immediately for command
-                    self.safe_after(0, lambda: self.set_state("LISTENING"))
-                    cmd = voice.listen_for_command(timeout=6, phrase_time_limit=10)
+                # Strip legacy wake words if spoken out of habit
+                clean_cmd = cmd.strip()
+                for prefix in ("hey jarvis", "hi jarvis", "jarvis", "हे जार्विस", "जार्विस", "hey jervis"):
+                    if clean_cmd.lower().startswith(prefix):
+                        clean_cmd = clean_cmd[len(prefix):].strip(",- ")
+                if not clean_cmd:
+                    clean_cmd = cmd.strip()
 
-                if cmd:
-                    self._process_and_reply(cmd)
+                if clean_cmd.lower() in ("goodbye", "bye", "sleep", "exit", "quit", "close"):
+                    audio_cues.play("stop")
+                    self.safe_after(0, lambda: self.set_state("IDLE"))
+                    self.log_transcript("SYSTEM", "Closed via voice command.")
+                    continue
+
+                self._process_and_reply(clean_cmd)
 
             except Exception as loop_err:
                 print(f"[Jarvis Voice Loop Error] {loop_err}")

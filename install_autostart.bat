@@ -16,7 +16,7 @@ if not exist "%VBS_TARGET%" (
 powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('%SHORTCUT_PATH%'); $s.TargetPath = '%VBS_TARGET%'; $s.WorkingDirectory = '%SCRIPT_DIR%'; $s.WindowStyle = 7; $s.Save()"
 
 echo.
-echo [SUCCESS] J.A.R.V.I.S will now start automatically in silent standby mode whenever your laptop boots!
-echo Ignition: Say "Hey Jarvis" or press Ctrl+Alt+J
-echo Standby:  Say "Goodbye Jarvis" or "Jarvis jao"
+echo [SUCCESS] J.A.R.V.I.S will now start automatically in silent background mode whenever your laptop boots!
+echo START: Press [Ctrl + Alt + J] to wake Jarvis and speak your command directly.
+echo CLOSE: Press [Ctrl + Alt + J] to close Jarvis.
 pause
