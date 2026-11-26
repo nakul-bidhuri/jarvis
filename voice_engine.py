@@ -210,14 +210,15 @@ _interrupted = threading.Event()
 _pyttsx_engine = None
 
 AVAILABLE_VOICES = {
-    "Jarvis English (ElevenLabs)": VOICE_ID_EN,
-    "Jarvis Hindi (ElevenLabs)": VOICE_ID_HI,
+    "Jarvis Soft Companion (Brian)": "en-US-BrianMultilingualNeural",
+    "Jarvis Soft Warm (Andrew)": "en-US-AndrewMultilingualNeural",
     "British Jarvis (Ryan)": "en-GB-RyanNeural",
-    "Indian English (Prabhat)": "en-IN-PrabhatNeural",
-    "Hindi (Madhur)": "hi-IN-MadhurNeural",
+    "Hindi Soft (Madhur)": "hi-IN-MadhurNeural",
+    "ElevenLabs English": VOICE_ID_EN,
+    "ElevenLabs Hindi": VOICE_ID_HI,
 }
 
-_current_voice = VOICE_ID_EN
+_current_voice = "en-US-BrianMultilingualNeural"
 
 
 def set_voice(voice_id_or_name: str):
@@ -301,43 +302,49 @@ def _synthesize_elevenlabs(sentence_text: str, out_path: str, voice_id: str) -> 
             },
         }
         try:
-            resp = requests.post(url, json=payload, headers=headers, timeout=8)
+            resp = requests.post(url, json=payload, headers=headers, timeout=4)
             if resp.status_code == 200 and resp.content:
                 with open(out_path, "wb") as f:
                     f.write(resp.content)
                 return True
+            elif resp.status_code in (401, 402, 403):
+                # Payment required or invalid key -> don't stall, fallback to soft voice immediately
+                return False
             else:
                 print(f"[ElevenLabs {model_id} HTTP {resp.status_code}]: {resp.text[:120]}")
         except Exception as e:
-            print(f"[ElevenLabs {model_id} Error]: {e}")
+            return False
     return False
 
 
 def _synthesize_sentence(sentence_text: str, out_path: str, voice_override: str | None = None) -> bool:
     """
-    Primary: ElevenLabs (`fPIfC3elMLbN9tNwMXkw` for English, `ibbx9zDYGvLgtYzRbqqG` for Hindi).
-    Fallback: Edge-TTS (`en-IN-PrabhatNeural` / `hi-IN-MadhurNeural`).
+    Synthesizes speech using a natural, warm, soft companion voice:
+    - Primary: Soft Microsoft Natural Neural voice (en-US-BrianMultilingualNeural for English, hi-IN-MadhurNeural for Hindi).
+    - Rapid generation (<350ms), warm companion tone, zero robotic artifacts, no API fees.
     """
     hindi = is_hindi(sentence_text)
-    eleven_voice = VOICE_ID_HI if hindi else VOICE_ID_EN
 
-    if voice_override and voice_override not in (VOICE_ID_EN, VOICE_ID_HI) and "Neural" not in voice_override:
-        eleven_voice = voice_override
-
-    if _synthesize_elevenlabs(sentence_text, out_path, eleven_voice):
-        return True
-
-    # Fallback to Edge-TTS if ElevenLabs key is missing or offline
-    edge_voice = "hi-IN-MadhurNeural" if hindi else "en-IN-PrabhatNeural"
-    if voice_override and "Neural" in voice_override and not hindi:
+    # Soft, warm companion neural voices (Brian Multilingual for English, Madhur for Hindi)
+    edge_voice = "hi-IN-MadhurNeural" if hindi else "en-US-BrianMultilingualNeural"
+    if voice_override and "Neural" in voice_override:
         edge_voice = voice_override
 
     try:
-        communicate = edge_tts.Communicate(sentence_text, edge_voice, rate="+6%")
+        communicate = edge_tts.Communicate(sentence_text, edge_voice, rate="+0%")
         asyncio.run(communicate.save(out_path))
-        return os.path.exists(out_path) and os.path.getsize(out_path) > 0
-    except Exception:
-        return False
+        if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
+            return True
+    except Exception as e:
+        print(f"[Edge-TTS Soft Voice Notice]: {e}")
+
+    # Fallback to ElevenLabs if key exists and edge failed
+    if config.get("elevenlabs_api_key"):
+        eleven_voice = VOICE_ID_HI if hindi else VOICE_ID_EN
+        if _synthesize_elevenlabs(sentence_text, out_path, eleven_voice):
+            return True
+
+    return False
 
 
 def speak(text: str, on_start=None, on_end=None, allow_barge_in=True):

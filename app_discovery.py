@@ -26,8 +26,8 @@ _cache_lock = threading.Lock()
 
 # Sub-20ms instant execution protocols for standard Windows applications
 FAST_APP_PROTOCOLS = {
-    "spotify": "start spotify:",
-    "whatsapp": "start whatsapp:",
+    "spotify": "spotify:",
+    "whatsapp": "whatsapp:",
     "calculator": "calc",
     "calc": "calc",
     "notepad": "notepad",
@@ -41,8 +41,8 @@ FAST_APP_PROTOCOLS = {
     "explorer": "explorer",
     "task manager": "taskmgr",
     "taskmgr": "taskmgr",
-    "settings": "start ms-settings:",
-    "windows settings": "start ms-settings:",
+    "settings": "ms-settings:",
+    "windows settings": "ms-settings:",
     "control panel": "control",
     "terminal": "wt",
     "cmd": "cmd",
@@ -173,6 +173,12 @@ def launch_app(query: str) -> Tuple[bool, str]:
     # 1. Sub-20ms instant launch shortcut
     if clean_q in FAST_APP_PROTOCOLS:
         cmd = FAST_APP_PROTOCOLS[clean_q]
+        if cmd.endswith(":"):
+            try:
+                os.startfile(cmd)
+                return True, f"Opening {clean_q.title()}."
+            except Exception:
+                pass
         try:
             subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             return True, f"Opening {clean_q.title()}."

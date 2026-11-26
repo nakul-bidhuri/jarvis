@@ -108,20 +108,14 @@ def find_spotify_hwnd() -> Optional[int]:
 
 
 def _focus_spotify_window() -> bool:
-    """Brings the Spotify window reliably to the foreground."""
+    """Brings the Spotify window safely to the foreground."""
     try:
         user32 = ctypes.windll.user32
-        kernel32 = ctypes.windll.kernel32
         spotify_hwnd = find_spotify_hwnd()
-
         if spotify_hwnd:
-            cur_thread = kernel32.GetCurrentThreadId()
-            fore_thread = user32.GetWindowThreadProcessId(user32.GetForegroundWindow(), None)
-            user32.AttachThreadInput(cur_thread, fore_thread, True)
             user32.ShowWindow(spotify_hwnd, 9)  # SW_RESTORE
             user32.SetForegroundWindow(spotify_hwnd)
             user32.BringWindowToTop(spotify_hwnd)
-            user32.AttachThreadInput(cur_thread, fore_thread, False)
             return True
     except Exception:
         pass
@@ -142,25 +136,24 @@ def is_spotify_running() -> bool:
 
 def ensure_spotify_ready(timeout: float = 2.0) -> bool:
     """
-    Verifies if Spotify is open. If not, launches it and waits
-    briefly until the process is active.
+    Verifies if Spotify is open. If not, launches it cleanly and waits
+    briefly until the application is ready.
     """
     if is_spotify_running():
         return True
 
-    # Launch Spotify via protocol
     try:
-        subprocess.Popen("start spotify:", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        os.startfile("spotify:")
     except Exception:
         try:
-            os.startfile("spotify:")
+            subprocess.Popen(["powershell", "-NoProfile", "-Command", "Start-Process 'spotify:'"])
         except Exception:
             pass
 
     t0 = time.time()
     while time.time() - t0 < timeout:
         if is_spotify_running():
-            time.sleep(0.4)
+            time.sleep(0.3)
             return True
         time.sleep(0.2)
 
@@ -168,8 +161,14 @@ def ensure_spotify_ready(timeout: float = 2.0) -> bool:
 
 
 def open_spotify() -> str:
-    """Opens Spotify and ensures it is running."""
-    ensure_spotify_ready()
+    """Opens Spotify cleanly and displays the window on screen."""
+    try:
+        os.startfile("spotify:")
+    except Exception:
+        try:
+            subprocess.Popen(["powershell", "-NoProfile", "-Command", "Start-Process 'spotify:'"])
+        except Exception:
+            pass
     try:
         import session_context
         session_context.context.set_active_app("Spotify", "native")
@@ -181,10 +180,8 @@ def open_spotify() -> str:
 def play_liked_songs() -> str:
     """
     Navigates to the user's Liked Songs collection on Spotify and triggers playback.
-    Executes instantly in a verified multi-step sequence.
+    Executes cleanly without causing window deadlocks.
     """
-    ensure_spotify_ready()
-
     # 1. Try Spotipy Web API if authenticated
     sp = _get_api_client()
     if sp:
@@ -200,16 +197,16 @@ def play_liked_songs() -> str:
 
     # 2. Native Windows Spotify URI Automation
     try:
-        subprocess.Popen("start spotify:collection:tracks", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        os.startfile("spotify:collection:tracks")
     except Exception:
         try:
-            os.startfile("spotify:collection:tracks")
+            subprocess.Popen(["powershell", "-NoProfile", "-Command", "Start-Process 'spotify:collection:tracks'"])
         except Exception:
             pass
 
-    # Trigger playback immediately
+    # Trigger playback immediately via media key
     def _trigger_liked_playback():
-        time.sleep(0.4)
+        time.sleep(0.5)
         _send_key(VK_MEDIA_PLAY_PAUSE)
 
     threading.Thread(target=_trigger_liked_playback, daemon=True).start()
@@ -256,10 +253,10 @@ def play_song(query: str) -> str:
     encoded = urllib.parse.quote(clean_q)
     uri = f"spotify:search:{encoded}"
     try:
-        subprocess.Popen(f"start {uri}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        os.startfile(uri)
     except Exception:
         try:
-            os.startfile(uri)
+            subprocess.Popen(["powershell", "-NoProfile", "-Command", f"Start-Process '{uri}'"])
         except Exception:
             pass
 
