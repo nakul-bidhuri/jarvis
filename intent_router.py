@@ -48,14 +48,68 @@ def normalize_text(text: str) -> str:
     return t
 
 
+def parse_whatsapp_command(text: str) -> Optional[Tuple[str, str]]:
+    """
+    Parses WhatsApp messaging commands from natural speech.
+    Returns (contact, message) or None.
+    Handles compound phrasing like:
+    - 'open whatsapp and someone chat and send a hi message to him'
+    - 'open whatsapp and send a hi message to rahul'
+    - 'send a hi message to rahul on whatsapp'
+    - 'send whatsapp message to mom saying reached home'
+    """
+    t = text.lower().strip()
+    if "whatsapp" not in t:
+        return None
+
+    # 1. "open whatsapp and ... send [msg] to [contact]"
+    m = re.search(r'open whatsapp and (?:.*(?:chat|contact) and )?send (?:a )?(.+?) (?:message )?to (.+)', t)
+    if m:
+        msg = m.group(1).strip()
+        contact = m.group(2).strip()
+        return contact, msg
+
+    # 2. "send [msg] to [contact] on whatsapp"
+    m = re.search(r'send (?:a )?(.+?) (?:message )?to (.+) on whatsapp', t)
+    if m:
+        return m.group(2).strip(), m.group(1).strip()
+
+    # 3. "send whatsapp message to [contact] saying [msg]"
+    m = re.search(r'send whatsapp (?:message )?to (.+?) saying (.+)', t)
+    if m:
+        return m.group(1).strip(), m.group(2).strip()
+
+    # 4. "send [msg] on whatsapp to [contact]"
+    m = re.search(r'send (.+?) on whatsapp to (.+)', t)
+    if m:
+        return m.group(2).strip(), m.group(1).strip()
+
+    # 5. "open whatsapp and send [contact] [msg]"
+    m = re.search(r'open whatsapp and send (.+?) (.+)', t)
+    if m:
+        return m.group(1).strip(), m.group(2).strip()
+
+    # 6. "open whatsapp chat for [contact]" or "open whatsapp chat with [contact]"
+    m = re.search(r'open whatsapp (?:chat )?(?:for|with) (.+)', t)
+    if m:
+        return m.group(1).strip(), ""
+
+    return None
+
+
 def split_multi_step_commands(clean_text: str) -> List[str]:
     """
     Decomposes multi-step phrases into separate sequential commands.
     E.g. 'open spotify and play my liked songs' -> ['open spotify', 'play my liked songs']
-    Avoids splitting single phrases like 'rock and roll', 'r and b', 'search for fast and furious'.
+    Avoids splitting single phrases like 'rock and roll', 'r and b', 'search for fast and furious',
+    or compound WhatsApp messaging commands.
     """
     # Guard against splitting queries that legitimately contain 'and'
     if any(clean_text.startswith(x) for x in ("search ", "google ", "who is ", "what is ", "why ")):
+        return [clean_text]
+
+    # Guard against splitting compound WhatsApp commands
+    if parse_whatsapp_command(clean_text) is not None:
         return [clean_text]
 
     # Split on explicit command connectors
@@ -80,6 +134,22 @@ def route_local_intent(phrase: str) -> Tuple[bool, str, Optional[str]]:
             return True, safe_messaging.confirm_and_dispatch(), "CONFIRM_MESSAGE"
         elif any(w in clean.split() for w in ("no", "cancel", "abort", "stop", "never")):
             return True, safe_messaging.cancel_staged_message(), "CANCEL_MESSAGE"
+
+    # 2. WhatsApp Messaging & Chat Intents
+    wa_action = parse_whatsapp_command(clean)
+    if wa_action:
+        contact, msg = wa_action
+        import ui_automator
+        res = ui_automator.open_whatsapp_chat(contact, msg)
+        ctx.record_intent("WHATSAPP_SEND", target=contact, query=msg, app="WhatsApp")
+        return True, res, "WHATSAPP_SEND"
+
+    if clean in ("open whatsapp", "launch whatsapp", "start whatsapp", "whatsapp"):
+        import ui_automator
+        ui_automator.launch_whatsapp()
+        ctx.set_active_app("WhatsApp", "native")
+        ctx.record_intent("OPEN_APP", target="WhatsApp", app="WhatsApp")
+        return True, "Opening WhatsApp for you now.", "OPEN_APP"
 
     # 2. Contextual Follow-Up Operations
     context_intent, context_target = ctx.resolve_contextual_action(clean)
@@ -313,6 +383,16 @@ def execute_command_pipeline(raw_text: str) -> Tuple[str, bool]:
     clean_text = normalize_text(raw_text)
     if not clean_text:
         return "I am online and listening.", False
+
+    # Fast path for compound WhatsApp messaging commands
+    wa_action = parse_whatsapp_command(clean_text)
+    if wa_action:
+        contact, msg = wa_action
+        import ui_automator
+        reply = ui_automator.open_whatsapp_chat(contact, msg)
+        session_context.context.record_intent("WHATSAPP_SEND", target=contact, query=msg, app="WhatsApp")
+        session_context.context.record_dialogue(raw_text, reply)
+        return reply, False
 
     # Decompose into multi-step actions if present
     sub_commands = split_multi_step_commands(clean_text)

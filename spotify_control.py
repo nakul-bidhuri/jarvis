@@ -95,7 +95,11 @@ def find_spotify_hwnd() -> Optional[int]:
                     class_buff = ctypes.create_unicode_buffer(256)
                     user32.GetClassNameW(hwnd, class_buff, 256)
                     cname = class_buff.value.lower()
-                    if "spotify" in title or "spotify" in cname:
+                    
+                    # Match main Spotify window
+                    if ("spotify" in title or "spotify" in cname) and not any(
+                        t in title for t in ("default ime", "msctls_statusbar32", "gdi+ window")
+                    ):
                         spotify_hwnd = hwnd
                         return False
             return True
@@ -107,68 +111,121 @@ def find_spotify_hwnd() -> Optional[int]:
         return None
 
 
-def _focus_spotify_window() -> bool:
-    """Brings the Spotify window safely to the foreground."""
+def _focus_spotify_window(hwnd: Optional[int] = None) -> bool:
+    """Brings the Spotify window safely and reliably to the foreground."""
     try:
         user32 = ctypes.windll.user32
-        spotify_hwnd = find_spotify_hwnd()
-        if spotify_hwnd:
-            user32.ShowWindow(spotify_hwnd, 9)  # SW_RESTORE
-            user32.SetForegroundWindow(spotify_hwnd)
-            user32.BringWindowToTop(spotify_hwnd)
+        if not hwnd:
+            hwnd = find_spotify_hwnd()
+        if hwnd:
+            if user32.IsIconic(hwnd):
+                user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+            else:
+                user32.ShowWindow(hwnd, 5)  # SW_SHOW
+            # Simulate Alt key to bypass Windows focus restrictions
+            user32.keybd_event(0x12, 0, 0, 0)
+            user32.SetForegroundWindow(hwnd)
+            user32.keybd_event(0x12, 0, 2, 0)
+            user32.BringWindowToTop(hwnd)
             return True
     except Exception:
         pass
     return False
 
 
-def is_spotify_running() -> bool:
-    """Checks if Spotify process or window is currently active."""
+def kill_zombie_spotify() -> bool:
+    """
+    Terminates deadlocked or headless Spotify processes that cause 'Spotify Not Responding'.
+    """
     try:
         import psutil
+        cleaned = False
         for p in psutil.process_iter(['name']):
-            if p.info and p.info.get('name') and 'spotify' in p.info['name'].lower():
-                return True
+            try:
+                n = p.info.get('name', '').lower()
+                if any(x in n for x in ('spotify.exe', 'spotifylauncher.exe', 'spotifyxboxgamebarwebview.exe')):
+                    p.kill()
+                    cleaned = True
+            except Exception:
+                pass
+        if cleaned:
+            time.sleep(0.5)
+        return cleaned
+    except Exception:
+        return False
+
+
+def _launch_spotify_process():
+    """Launches Spotify cleanly via Windows Shell to prevent process mutex deadlocks."""
+    # 1. Official UWP AppID via Windows Explorer (bypasses sandbox & child process limits)
+    try:
+        subprocess.Popen(["explorer.exe", r"shell:AppsFolder\SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify"])
+        return
     except Exception:
         pass
+
+    # 2. URI Protocol
+    try:
+        os.startfile("spotify:")
+        return
+    except Exception:
+        pass
+
+    # 3. Fallback start
+    try:
+        subprocess.Popen("start spotify:", shell=True)
+    except Exception:
+        pass
+
+
+def is_spotify_running() -> bool:
+    """Checks if Spotify has an active visible window."""
     return find_spotify_hwnd() is not None
 
 
-def ensure_spotify_ready(timeout: float = 2.0) -> bool:
+def ensure_spotify_ready(timeout: float = 3.0) -> bool:
     """
-    Verifies if Spotify is open. If not, launches it cleanly and waits
-    briefly until the application is ready.
+    Verifies if Spotify is open with a visible, responsive UI.
+    If stuck in a headless deadlock, recovers it automatically and ensures it is ready.
     """
-    if is_spotify_running():
+    hwnd = find_spotify_hwnd()
+    if hwnd:
+        _focus_spotify_window(hwnd)
         return True
 
+    # If Spotify processes are running without a window, they are locked up in zombie state
     try:
-        os.startfile("spotify:")
+        import psutil
+        has_procs = any('spotify' in p.info.get('name', '').lower() for p in psutil.process_iter(['name']))
+        if has_procs:
+            print("[Spotify] Detected headless/hung Spotify processes. Recovering...")
+            kill_zombie_spotify()
     except Exception:
-        try:
-            subprocess.Popen(["powershell", "-NoProfile", "-Command", "Start-Process 'spotify:'"])
-        except Exception:
-            pass
+        pass
+
+    # Launch fresh instance
+    _launch_spotify_process()
 
     t0 = time.time()
     while time.time() - t0 < timeout:
-        if is_spotify_running():
+        hwnd = find_spotify_hwnd()
+        if hwnd:
             time.sleep(0.3)
+            _focus_spotify_window(hwnd)
             return True
-        time.sleep(0.2)
+        time.sleep(0.3)
 
-    return is_spotify_running()
+    return find_spotify_hwnd() is not None
 
 
 def open_spotify() -> str:
-    """Opens Spotify cleanly and displays the window on screen."""
-    try:
-        os.startfile("spotify:")
-    except Exception:
-        try:
-            subprocess.Popen(["powershell", "-NoProfile", "-Command", "Start-Process 'spotify:'"])
-        except Exception:
-            pass
+    """Opens Spotify cleanly and displays the window on screen without deadlocking."""
+    hwnd = find_spotify_hwnd()
+    if hwnd:
+        _focus_spotify_window(hwnd)
+    else:
+        ensure_spotify_ready(timeout=3.5)
+
     try:
         import session_context
         session_context.context.set_active_app("Spotify", "native")
@@ -182,6 +239,8 @@ def play_liked_songs() -> str:
     Navigates to the user's Liked Songs collection on Spotify and triggers playback.
     Executes cleanly without causing window deadlocks.
     """
+    ensure_spotify_ready(timeout=3.0)
+
     # 1. Try Spotipy Web API if authenticated
     sp = _get_api_client()
     if sp:

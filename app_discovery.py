@@ -170,6 +170,23 @@ def launch_app(query: str) -> Tuple[bool, str]:
     """Launches any installed application by name with sub-20ms instant protocol acceleration."""
     clean_q = query.lower().strip()
 
+    # Specialized Launchers for complex apps
+    if clean_q == "whatsapp":
+        try:
+            import ui_automator
+            ui_automator.launch_whatsapp()
+            return True, "Opening WhatsApp for you."
+        except Exception:
+            pass
+
+    if clean_q == "spotify":
+        try:
+            import spotify_control
+            msg = spotify_control.open_spotify()
+            return True, msg
+        except Exception:
+            pass
+
     # 1. Sub-20ms instant launch shortcut
     if clean_q in FAST_APP_PROTOCOLS:
         cmd = FAST_APP_PROTOCOLS[clean_q]
