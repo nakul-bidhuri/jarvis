@@ -84,11 +84,12 @@ threading.Thread(target=_get_offline_whisper, daemon=True).start()
 _recognizer = sr.Recognizer()
 _recognizer.energy_threshold = 280.0
 _recognizer.dynamic_energy_threshold = False  # Locked after calibration to avoid ambient noise inflation
-_recognizer.pause_threshold = 0.45
-_recognizer.phrase_threshold = 0.15
-_recognizer.non_speaking_duration = 0.30
+_recognizer.pause_threshold = 0.85
+_recognizer.phrase_threshold = 0.20
+_recognizer.non_speaking_duration = 0.45
 
 _mic = sr.Microphone()
+_last_speech_end_time = 0.0
 
 # Common Whisper hallucinations on silence/fan noise
 SILENCE_HALLUCINATIONS = {
@@ -117,12 +118,27 @@ def calibrate():
 
 def transcribe_audio(audio: sr.AudioData, language: str = "en-IN") -> str:
     """
-    Fast transcription with balanced filtering so 'Hey Jarvis' and Indian accents are never dropped.
+    Fast, highly reliable transcription optimized for Indian English accents:
+    1. Primary: Google Speech Recognition (en-IN) — ultra-fast (<350ms), exceptional Indian accent accuracy.
+    2. Fallback: Local Faster-Whisper with Silero VAD — private, offline.
+    3. Tertiary: Google Speech Recognition (hi-IN) — for Hindi / Hinglish.
     """
-    # 1. Primary: Local Faster-Whisper with Silero VAD
+    # 1. Primary: Google Speech Recognition (en-IN)
+    try:
+        t0 = time.time()
+        res = _recognizer.recognize_google(audio, language=language).strip()
+        dt = time.time() - t0
+        if res and res.lower().strip(string.punctuation) not in SILENCE_HALLUCINATIONS:
+            print(f"[STT] Google ({language}) transcribed in {dt:.3f}s: '{res}'")
+            return res
+    except Exception:
+        pass
+
+    # 2. Secondary fallback: Local Faster-Whisper
     try:
         model = _get_offline_whisper()
         if model:
+            t0 = time.time()
             wav_io = io.BytesIO(audio.get_wav_data())
             segments, _ = model.transcribe(
                 wav_io,
@@ -143,16 +159,10 @@ def transcribe_audio(audio: sr.AudioData, language: str = "en-IN") -> str:
                 if chunk and chunk.lower().strip(string.punctuation) not in SILENCE_HALLUCINATIONS:
                     valid_chunks.append(chunk)
             text = " ".join(valid_chunks).strip()
+            dt = time.time() - t0
             if text:
+                print(f"[STT] Faster-Whisper transcribed in {dt:.3f}s: '{text}'")
                 return text
-    except Exception:
-        pass
-
-    # 2. Secondary fallback: Google Speech API (en-IN)
-    try:
-        res = _recognizer.recognize_google(audio, language=language).strip()
-        if res and res.lower().strip(string.punctuation) not in SILENCE_HALLUCINATIONS:
-            return res
     except Exception:
         pass
 
@@ -161,6 +171,7 @@ def transcribe_audio(audio: sr.AudioData, language: str = "en-IN") -> str:
         try:
             res_hi = _recognizer.recognize_google(audio, language="hi-IN").strip()
             if res_hi and res_hi.lower().strip(string.punctuation) not in SILENCE_HALLUCINATIONS:
+                print(f"[STT] Google (hi-IN) transcribed: '{res_hi}'")
                 return res_hi
         except Exception:
             pass
@@ -406,6 +417,8 @@ def speak(text: str, on_start=None, on_end=None, allow_barge_in=True):
                 except Exception:
                     pass
             _speaking.clear()
+            global _last_speech_end_time
+            _last_speech_end_time = time.time()
             if on_end:
                 on_end()
 
@@ -559,18 +572,38 @@ def listen_for_wake_word(session_active: bool = False) -> tuple[bool, str]:
     return False, ""
 
 
-def listen_for_command(timeout=4.5, phrase_time_limit=8.0, on_amplitude=None) -> str:
-    """Listens for a direct command right after 'Hey Jarvis' wake word."""
+def is_speaking() -> bool:
+    return _speaking.is_set()
+
+
+def listen_for_command(timeout=4.5, phrase_time_limit=12.0, on_amplitude=None) -> str:
+    """
+    Listens for speech input with active anti-self-hearing:
+    1. Waits if Jarvis is currently speaking (blocks TTS feedback).
+    2. Enforces a 250ms acoustic grace buffer after TTS stops before opening mic.
+    3. Uses generous pause_threshold (0.85s) for natural Indian English phrasing.
+    4. Distinguishes NO SPEECH from actual commands (returns "" on silence).
+    """
+    # 1. Block listening while speaking
+    while _speaking.is_set():
+        time.sleep(0.05)
+
+    # 2. Wait out residual acoustic room echo from laptop speakers
+    elapsed = time.time() - _last_speech_end_time
+    if elapsed < 0.25:
+        time.sleep(0.25 - elapsed)
+
     try:
         import music_player
         music_player.duck_audio()
     except Exception:
         pass
+
     with _mic as source:
         try:
-            _recognizer.pause_threshold = 0.50
+            _recognizer.pause_threshold = 0.85
             _recognizer.phrase_threshold = 0.20
-            _recognizer.non_speaking_duration = 0.30
+            _recognizer.non_speaking_duration = 0.45
             audio = _recognizer.listen(source, timeout=timeout, phrase_time_limit=phrase_time_limit)
         except sr.WaitTimeoutError:
             return ""
@@ -578,3 +611,16 @@ def listen_for_command(timeout=4.5, phrase_time_limit=8.0, on_amplitude=None) ->
             return ""
 
     return transcribe_audio(audio, language="en-IN")
+
+
+def get_startup_greeting() -> str:
+    """Returns a natural, warm conversational greeting for Jarvis startup."""
+    import datetime
+    hr = datetime.datetime.now().hour
+    if 4 <= hr < 12:
+        part = "Good morning"
+    elif 12 <= hr < 17:
+        part = "Good afternoon"
+    else:
+        part = "Good evening"
+    return f"{part} Nakul. Jarvis online, how can I help?"

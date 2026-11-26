@@ -726,10 +726,11 @@ class JarvisApp(ctk.CTk):
 
     def _run_conversational_loop(self):
         """
-        Shortcut-Driven Voice Loop:
-        The microphone stays completely silent until the user presses [Ctrl + Alt + J].
-        Pressing [Ctrl + Alt + J] starts listening directly (no wake word needed).
-        Pressing [Ctrl + Alt + J] again closes Jarvis and stops listening/speaking.
+        Continuous Natural Voice Loop:
+        - Press [Ctrl + Alt + J] to turn ON: Jarvis greets Nakul and stays continuously listening.
+        - Talk naturally ('Open Spotify', 'Play my liked songs', 'Next', 'Volume down').
+        - Silence NEVER closes the session.
+        - Press [Ctrl + Alt + J] again to turn OFF: Jarvis announces offline and rests silently.
         """
         try:
             voice.calibrate()
@@ -740,56 +741,84 @@ class JarvisApp(ctk.CTk):
 
         while self.is_assistant_running:
             try:
-                # Wait silently for [Ctrl + Alt + J]
+                # STATE: OFF (Wait silently for [Ctrl + Alt + J])
                 self._hotkey_event.wait()
                 self._hotkey_event.clear()
 
                 if not self.is_assistant_running:
                     break
 
-                # If already active or speaking, stop/close!
+                # If already active or speaking, stop and turn OFF!
                 if self.assistant_busy:
-                    voice.stop_speech()
+                    voice.stop_speaking()
                     audio_cues.play("stop")
                     self.assistant_busy = False
                     self.safe_after(0, lambda: self.set_state("IDLE"))
-                    self.log_transcript("SYSTEM", "Stopped via [Ctrl + Alt + J].")
+                    self.log_transcript("SYSTEM", "Jarvis offline [Ctrl + Alt + J].")
                     continue
 
-                # START: Begin listening directly!
+                # STATE: STARTING (ON)
                 audio_cues.play("wake")
+                greeting = voice.get_startup_greeting()
+                self.log_transcript("JARVIS", greeting, self.theme["accent_alt"])
+                self.safe_after(0, lambda: self.set_state("SPEAKING"))
+                voice.speak(greeting)
+
+                session_on = True
                 self.safe_after(0, lambda: self.set_state("LISTENING"))
-                self.log_transcript("SYSTEM", "Activated via [Ctrl + Alt + J]. Listening...", self.theme["accent"])
+                self.log_transcript("SYSTEM", "Jarvis online. Listening continuously...", self.theme["accent"])
 
-                cmd = voice.listen_for_command(timeout=6.0, phrase_time_limit=12.0)
+                while session_on and self.is_assistant_running:
+                    # 1. Check if user pressed Ctrl+Alt+J to turn OFF
+                    if self._hotkey_event.is_set():
+                        self._hotkey_event.clear()
+                        session_on = False
+                        break
 
-                # Check if hotkey was pressed to cancel while listening
-                if self._hotkey_event.is_set():
-                    self._hotkey_event.clear()
-                    audio_cues.play("stop")
-                    self.safe_after(0, lambda: self.set_state("IDLE"))
-                    self.log_transcript("SYSTEM", "Closed via [Ctrl + Alt + J].")
-                    continue
+                    # 2. STATE: LISTENING
+                    cmd = voice.listen_for_command(timeout=3.5, phrase_time_limit=12.0)
 
-                if not cmd or not cmd.strip():
-                    self.safe_after(0, lambda: self.set_state("IDLE"))
-                    continue
+                    # Check hotkey during listening
+                    if self._hotkey_event.is_set():
+                        self._hotkey_event.clear()
+                        session_on = False
+                        break
 
-                # Strip legacy wake words if spoken out of habit
-                clean_cmd = cmd.strip()
-                for prefix in ("hey jarvis", "hi jarvis", "jarvis", "हे जार्विस", "जार्विस", "hey jervis"):
-                    if clean_cmd.lower().startswith(prefix):
-                        clean_cmd = clean_cmd[len(prefix):].strip(",- ")
-                if not clean_cmd:
+                    # 3. Handle Silence (NO SPEECH) — Keep waiting quietly!
+                    if not cmd or not cmd.strip():
+                        self.safe_after(0, lambda: self.set_state("IDLE"))
+                        time.sleep(0.08)
+                        continue
+
+                    # 4. User finished speaking
                     clean_cmd = cmd.strip()
+                    for prefix in ("hey jarvis", "hi jarvis", "jarvis", "हे जार्विस", "जार्विस", "hey jervis", "jervis"):
+                        if clean_cmd.lower().startswith(prefix):
+                            clean_cmd = clean_cmd[len(prefix):].strip(",- ")
+                    if not clean_cmd:
+                        clean_cmd = cmd.strip()
 
-                if clean_cmd.lower() in ("goodbye", "bye", "sleep", "exit", "quit", "close"):
-                    audio_cues.play("stop")
-                    self.safe_after(0, lambda: self.set_state("IDLE"))
-                    self.log_transcript("SYSTEM", "Closed via voice command.")
-                    continue
+                    if clean_cmd.lower() in ("shutdown jarvis", "turn off jarvis", "deactivate jarvis", "stop jarvis", "exit jarvis"):
+                        session_on = False
+                        break
 
-                self._process_and_reply(clean_cmd)
+                    # 5. Process and speak
+                    self._process_and_reply(clean_cmd)
+
+                    # Check hotkey after command
+                    if self._hotkey_event.is_set():
+                        self._hotkey_event.clear()
+                        session_on = False
+                        break
+
+                    # Return to LISTENING for next directive
+                    self.safe_after(0, lambda: self.set_state("LISTENING"))
+
+                # STATE: OFF
+                voice.stop_speaking()
+                audio_cues.play("stop")
+                self.safe_after(0, lambda: self.set_state("IDLE"))
+                self.log_transcript("SYSTEM", "Jarvis offline. Press [Ctrl + Alt + J] to start.")
 
             except Exception as loop_err:
                 print(f"[Jarvis Voice Loop Error] {loop_err}")
@@ -801,7 +830,7 @@ class JarvisApp(ctk.CTk):
         audio_cues.play("think")
         self.safe_after(0, lambda: self.set_state("THINKING", user_text[:32]))
 
-        # Route to Gemini Agent with conversational memory or fast router
+        # Route to fast intent pipeline or Gemini LLM
         reply, should_exit = commands.handle_command(user_text)
         self.log_transcript("JARVIS", reply, self.theme["accent_alt"])
 
@@ -819,12 +848,6 @@ class JarvisApp(ctk.CTk):
             self.safe_after(1000, self.destroy)
             return
 
-        # If user explicitly told Jarvis to sleep/standby, return to cold sleep mode
-        if should_exit == "sleep" and any(w in user_text.lower() for w in ("sleep", "standby", "goodbye", "bye", "stop listening")):
-            self.is_session_active = False
-
-        # Return directly to silent standby background mode!
-        self.safe_after(0, lambda: self.set_state("IDLE"))
         self.assistant_busy = False
 
     def send_text_command(self):

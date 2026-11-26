@@ -342,75 +342,51 @@ def press_shortcut(keys: str) -> str:
 
 def play_music(query: str) -> str:
     """Plays any requested song, artist, album, or playlist directly on Spotify automatically without touching any buttons."""
-    global _should_shutdown
-    _should_shutdown = "sleep"
     return spotify_control.play_song(query)
 
 def pause_music() -> str:
     """Pauses Spotify music playback."""
-    global _should_shutdown
-    _should_shutdown = "sleep"
     return spotify_control.pause()
 
 def resume_music() -> str:
     """Resumes Spotify music playback."""
-    global _should_shutdown
-    _should_shutdown = "sleep"
     return spotify_control.resume()
 
 def stop_music() -> str:
     """Stops Spotify music playback."""
-    global _should_shutdown
-    _should_shutdown = "sleep"
     return spotify_control.pause()
 
 def next_song() -> str:
     """Skips to the next song on Spotify."""
-    global _should_shutdown
-    _should_shutdown = "sleep"
     return spotify_control.next_track()
 
 def set_music_volume(volume_percent: int) -> str:
     """Sets Spotify music playback volume (0 to 100)."""
-    global _should_shutdown
-    _should_shutdown = "sleep"
     spotify_control.set_volume(volume_percent)
     return f"Spotify volume set to {volume_percent} percent."
 
 def what_song_is_playing() -> str:
     """Tells the title and artist of the song currently playing."""
-    global _should_shutdown
-    _should_shutdown = "sleep"
     return music_player.get_now_playing()
 
 def play_on_spotify(query: str) -> str:
     """Searches and plays any requested song, artist, album, genre, or user playlist on Spotify automatically without requiring the user to tap play or pause."""
-    global _should_shutdown
-    _should_shutdown = "sleep"
     return spotify_control.play_song(query)
 
 def pause_spotify() -> str:
     """Pauses Spotify music."""
-    global _should_shutdown
-    _should_shutdown = "sleep"
     return spotify_control.pause()
 
 def resume_spotify() -> str:
     """Resumes Spotify music."""
-    global _should_shutdown
-    _should_shutdown = "sleep"
     return spotify_control.resume()
 
 def next_song_on_spotify() -> str:
     """Skips to the next song on Spotify."""
-    global _should_shutdown
-    _should_shutdown = "sleep"
     return spotify_control.next_track()
 
 def set_spotify_volume(volume_percent: int) -> str:
     """Sets Spotify volume (0 to 100)."""
-    global _should_shutdown
-    _should_shutdown = "sleep"
     return spotify_control.set_volume(volume_percent)
 
 # ---------- Universal Laptop Access & System Control ----------
@@ -628,162 +604,15 @@ def clear_conversation_memory():
     _chat = None
     _active_model = None
 
-# ---------- Fast Router ----------
+# ---------- Fast Router & Intent Pipeline Delegation ----------
 
-STANDBY_COMMANDS = {
-    # Jarvis commands
-    "jarvis goodbye", "jarvis stop", "goodbye jarvis", "stop jarvis", "bye jarvis",
-    "close jarvis", "exit jarvis", "turn off jarvis", "shut down jarvis", "shutdown jarvis",
-    "jarvis sleep", "sleep jarvis",
-    # Universal commands
-    "goodbye", "bye", "stop", "exit", "quit", "shutdown", "shut down", "close", "kill", "turn off",
-    "go to sleep", "sleep", "stop listening", "cancel", "never mind", "nevermind", "standby"
-}
+def handle_command(text: str) -> tuple[str, bool]:
+    """
+    Main Command Router Entry Point:
+    Routes through intent_router for sub-50ms local intent execution,
+    multi-step actions, and session context awareness, with seamless
+    fallback to Gemini LLM for complex knowledge and mentoring.
+    """
+    import intent_router
+    return intent_router.execute_command_pipeline(text)
 
-def handle_command(text: str) -> tuple[str, bool | str]:
-    """Returns (spoken_reply, should_exit). Uses Gemini as the core router."""
-    clean = text.lower().strip().translate(str.maketrans('', '', string.punctuation))
-    
-    # Explicit termination only on rare force kill command
-    if clean in ("terminate jarvis completely", "force quit jarvis", "kill jarvis process"):
-        return "Shutting down completely. Goodbye Nakul.", True
-
-    # Strip leading wake words for direct fast matching
-    for prefix in (
-        "hey jarvis ", "ok jarvis ", "jarvis ", "hello jarvis ", "hi jarvis ", "yo jarvis ",
-        "hey jervis ", "ok jervis ", "jervis ", "hello jervis ", "hi jervis ", "yo jervis "
-    ):
-        if clean.startswith(prefix):
-            clean = clean[len(prefix):].strip()
-            break
-
-    # Pending Safe Messaging Confirmation Guard
-    if safe_messaging.has_pending_message():
-        if any(w in clean for w in ("yes", "send", "send it", "confirm", "proceed", "okay", "sure", "yep")):
-            return safe_messaging.confirm_and_dispatch(), "sleep"
-        elif any(w in clean for w in ("no", "cancel", "dont", "do not", "abort", "stop", "never")):
-            return safe_messaging.cancel_staged_message(), "sleep"
-
-    # Natural activation greetings (Siri / Alexa / Nexus style)
-    if not clean or clean in (
-        "jarvis", "hey jarvis", "jervis", "hey jervis",
-        "to start", "start", "start jarvis", "start jervis",
-        "wake up", "wake up jarvis", "wake up jervis",
-        "turn on", "are you there", "are you online",
-        "हे जार्विस", "जार्विस", "नमस्ते जार्विस", "शुरू करो"
-    ):
-        audio_cues.play("wake")
-        if any('\u0900' <= c <= '\u097f' for c in text):
-            return "हाँ नकुल जी, मैं ऑनलाइन हूँ। बताइए मैं आपकी क्या सहायता करूँ?", "sleep"
-        return "Yes, Nakul? I am online and listening.", "sleep"
-
-    # Executive Daily Briefing (Nexus / Tony Stark style)
-    if clean in ("brief me", "daily briefing", "morning briefing", "give me briefing", "briefing", "jarvis brief me", "status briefing"):
-        audio_cues.play("confirm")
-        return daily_briefing.generate_daily_briefing(), "sleep"
-
-    # Real-Time Live Weather
-    if any(clean.startswith(w) for w in ("weather", "whats the weather", "what is the weather", "temperature")):
-        loc = "Dehradun"
-        if " in " in clean:
-            loc = clean.split(" in ")[-1].strip()
-        audio_cues.play("confirm")
-        return live_knowledge.get_live_weather(loc), "sleep"
-
-    # Real-Time Live News
-    if clean in ("news", "latest news", "breaking news", "headlines", "whats the news", "tell me news"):
-        audio_cues.play("confirm")
-        return live_knowledge.get_live_news(), "sleep"
-
-    # Screenshots & Desktop Bridge
-    if clean in ("take screenshot", "screenshot", "capture screen", "snapshot screen"):
-        audio_cues.play("confirm")
-        return laptop_controller.take_screenshot(), "sleep"
-    if clean in ("read clipboard", "whats in my clipboard", "clipboard", "check clipboard"):
-        audio_cues.play("confirm")
-        return laptop_controller.read_clipboard(), "sleep"
-    if clean in ("open vs code", "open vscode", "open code", "launch vscode", "launch vs code", "vscode", "vs code"):
-        audio_cues.play("confirm")
-        return laptop_controller.open_code_editor(), "sleep"
-
-    # Active Reminders
-    if clean in ("list reminders", "my reminders", "check reminders", "what reminders do i have", "active reminders"):
-        audio_cues.play("confirm")
-        return reminder_scheduler.list_active_reminders(), "sleep"
-    if clean.startswith("remind me ") or clean.startswith("set reminder "):
-        spec = clean.replace("set reminder ", "").replace("remind me ", "").strip()
-        if " to " in spec:
-            parts = spec.split(" to ", 1)
-            if any(t in parts[0] for t in ("at ", "in ", "pm", "am", "mins", "minute")):
-                time_p, task_p = parts[0], parts[1]
-            else:
-                task_p, time_p = parts[0], parts[1]
-            audio_cues.play("confirm")
-            return reminder_scheduler.add_reminder(task_p, time_p), "sleep"
-
-    # Instant media controls (Alexa style — stays in silent standby mode!)
-    if clean in ("pause music", "pause song", "pause", "pause playback"):
-        return pause_music(), "sleep"
-    if clean in ("stop music", "stop song", "halt music"):
-        return stop_music(), "sleep"
-    if clean in ("resume music", "resume song", "resume", "continue music"):
-        return resume_music(), "sleep"
-    if clean in ("next song", "skip song", "next track", "skip track", "next", "skip", "play next", "swing to next song", "swing to next", "change song"):
-        return next_song(), "sleep"
-    if clean in ("previous song", "previous track", "last song", "previous", "back"):
-        return spotify_control.previous_track(), "sleep"
-    if clean in ("what song is this", "what is playing", "whats playing", "which song is this", "song name"):
-        return what_song_is_playing(), "sleep"
-
-    # Fast direct music trigger (e.g. "play believer", "play starboy", "play top hits")
-    if clean.startswith("play ") and not any(clean.startswith(x) for x in ("play game", "play video", "play with")):
-        song_query = clean[5:].strip()
-        if song_query:
-            return play_music(song_query), "sleep"
-
-    # Fast Brightness Shortcut
-    if "brightness" in clean:
-        import re
-        nums = re.findall(r'\d+', clean)
-        if nums:
-            lvl = int(nums[0])
-            return set_display_brightness(lvl), "sleep"
-
-    # Fast App / Tool Launching (Sub-50ms Response Time!)
-    if clean in ("open whatsapp", "launch whatsapp", "start whatsapp", "whatsapp"):
-        return open_app("whatsapp"), "sleep"
-    if clean in ("open chrome", "launch chrome", "start chrome", "chrome"):
-        return open_app("chrome"), "sleep"
-    if clean in ("open brave", "launch brave", "start brave", "brave"):
-        return open_app("brave"), "sleep"
-    if clean in ("open notepad", "launch notepad", "start notepad", "notepad"):
-        return open_app("notepad"), "sleep"
-    if clean in ("open spotify", "launch spotify", "start spotify", "spotify"):
-        return open_app("spotify"), "sleep"
-    if clean in ("open calculator", "launch calculator", "calculator", "calc"):
-        return open_windows_system_tool("calculator"), "sleep"
-    if clean in ("open task manager", "task manager", "open taskmanager"):
-        return open_windows_system_tool("task manager"), "sleep"
-    if clean in ("open control panel", "control panel"):
-        return open_windows_system_tool("control panel"), "sleep"
-    if clean in ("open settings", "windows settings", "open windows settings"):
-        return open_windows_system_tool("settings"), "sleep"
-    if clean in ("open file explorer", "open explorer", "file explorer"):
-        return open_windows_system_tool("file explorer"), "sleep"
-    if clean in ("open downloads", "open my downloads", "downloads folder", "downloads"):
-        return open_file_or_folder("Downloads"), "sleep"
-    if clean in ("open desktop", "open my desktop", "desktop folder", "desktop"):
-        return open_file_or_folder("Desktop"), "sleep"
-    if clean in ("battery", "battery percentage", "battery status", "check battery", "whats the battery", "what is the battery", "how much battery"):
-        return laptop_controller.get_battery_status(), "sleep"
-
-    # All normal voice exit commands route to Background Standby (wakeable via 'Hey Jarvis')
-    if clean in STANDBY_COMMANDS or any(clean.startswith(prefix) for prefix in (
-        "goodbye", "shut down", "shutdown", "turn off", "exit jarvis", "close jarvis",
-        "stop listening", "go to sleep", "sleep"
-    )):
-        clear_conversation_memory()
-        return "Standing by in the background, Nakul. Say Hey Jarvis whenever you need me.", "sleep"
-
-    t = text.strip()
-    return process_with_gemini(t)

@@ -1,25 +1,22 @@
 """
-main.py – J.A.R.V.I.S Shortcut Key Edition (Ctrl + Alt + J).
+main.py — J.A.R.V.I.S Natural Continuous Assistant (Ctrl + Alt + J).
 
-Control Lifecycle:
-  1. DORMANT / CLOSED (Zero-Resource Background):
-     - Jarvis starts quietly in the background on Windows boot or manual start.
-     - The microphone is completely OFF (no passive listening, zero CPU usage, no false triggers).
-     - Waits ONLY for the global shortcut: Ctrl + Alt + J.
-  2. START / ACTIVATE (Ctrl + Alt + J):
-     - Pressing Ctrl + Alt + J instantly wakes Jarvis.
-     - Plays futuristic wake chime.
-     - Displays floating HUD: "Listening... 🎙️".
-     - Immediately captures your voice directive (no wake word needed!).
-     - Preserves all UI modes:
-         * "Listening... 🎙️" (#22d3ee)
-         * "Thinking... 🧠" (#f59e0b)
-         * "Speaking... 💬" (#a855f7)
-     - Jarvis answers aloud with his expressive bilingual voice.
-  3. CLOSE / DEACTIVATE (Ctrl + Alt + J):
-     - Pressing Ctrl + Alt + J while Jarvis is active closes him immediately.
-     - Stops listening, cuts off any speech playback, plays close chime, hides HUD.
-     - Returns to completely dormant background state.
+State Lifecycle:
+  - OFF:
+      Completely inactive, microphone OFF, 0% CPU usage.
+      Waits for global shortcut: [Ctrl + Alt + J].
+  - LISTENING:
+      Microphone actively capturing speech input.
+      Does NOT timeout or shut down on silence!
+  - PROCESSING:
+      Fast local intent routing (<50ms) or Gemini LLM reasoning.
+  - SPEAKING:
+      Expressive neural TTS playback. Microphone paused to prevent feedback echo.
+  - IDLE / STANDBY:
+      Jarvis remains ON and available for continuous natural dialogue.
+      Silence for 5s or 30+ minutes NEVER turns Jarvis OFF.
+  - DEACTIVATION:
+      Second press of [Ctrl + Alt + J] transitions Jarvis to OFF.
 """
 
 import os
@@ -28,8 +25,10 @@ import time
 import socket
 import threading
 import tkinter as tk
+
 import voice_engine as voice
 import commands
+import session_context
 
 INSTANCE_PORT = 48123
 _instance_socket = None
@@ -62,7 +61,7 @@ def _on_hotkey_pressed():
 
 def _start_global_hotkey_listener():
     """
-    Registers Ctrl+Alt+J using both the keyboard hook AND the native Win32 RegisterHotKey API
+    Registers Ctrl+Alt+J using both the keyboard hook AND native Win32 RegisterHotKey
     to guarantee 100% reliable detection across all windows and games.
     """
     # 1. Primary: keyboard library hook
@@ -109,15 +108,15 @@ class VoiceIndicatorUI:
         self.root.config(bg="#06101b")
 
         screen_width = self.root.winfo_screenwidth()
-        width, height = 340, 52
+        width, height = 360, 52
         x = (screen_width - width) // 2
         y = 26
         self.root.geometry(f"{width}x{height}+{x}+{y}")
 
         self.label = tk.Label(
             self.root,
-            text="Listening... 🎙️",
-            fg="#22d3ee",
+            text="Jarvis Online 🟢",
+            fg="#10b981",
             bg="#06101b",
             font=("Segoe UI", 12, "bold"),
         )
@@ -152,100 +151,106 @@ def assistant_loop():
     _start_global_hotkey_listener()
 
     print("\n==================================================")
-    print(" [J.A.R.V.I.S] Shortcut Key Edition Online")
-    print("  • START: Press [Ctrl + Alt + J] to start listening")
-    print("  • CLOSE: Press [Ctrl + Alt + J] to close/stop")
-    print("  • No wake words or passive standby listening.")
+    print(" [J.A.R.V.I.S] Continuous Voice OS Online")
+    print("  • START: Press [Ctrl + Alt + J] to turn ON")
+    print("  • TALK: Speak commands naturally (e.g. 'Open Spotify', 'Play my liked songs', 'Next')")
+    print("  • STOP:  Press [Ctrl + Alt + J] to turn OFF")
+    print("  • Silence NEVER turns Jarvis off. Sessions remain continuous.")
     print("==================================================\n")
 
     while True:
-        # DORMANT STATE: Wait silently until the user presses Ctrl + Alt + J
+        # STATE: OFF (DORMANT)
         _hotkey_toggle_event.wait()
         _hotkey_toggle_event.clear()
 
-        # START ACTIVATION
+        # STATE: STARTING (ON)
         _is_active = True
         voice.play_audio_cue("wake")
+        safe_ui_update("Jarvis Online 🟢", "#10b981")
+
+        # Conversational warm greeting on startup
+        greeting = voice.get_startup_greeting()
+        print(f"[STATE] ON — {greeting}")
+        safe_ui_update("Speaking... 💬", "#a855f7")
+        voice.speak(greeting)
+
         safe_ui_update("Listening... 🎙️", "#22d3ee")
-        print("[Jarvis] Started via shortcut. Listening for your directive...")
+        print("[STATE] LISTENING — Mic active, speak your command freely...")
 
         while _is_active:
-            # Check if user pressed Ctrl+Alt+J to CLOSE before/during listening
+            # 1. Check if user pressed Ctrl+Alt+J to turn OFF
             if _hotkey_toggle_event.is_set():
                 _hotkey_toggle_event.clear()
                 _is_active = False
                 break
 
-            # Listen for user command directly (no wake word required!)
-            cmd = voice.listen_for_command(timeout=6.0, phrase_time_limit=12.0)
+            # 2. STATE: LISTENING
+            cmd = voice.listen_for_command(timeout=3.5, phrase_time_limit=12.0)
 
-            # Check if user pressed Ctrl+Alt+J to CLOSE while speaking/listening
+            # Check if user pressed hotkey to turn OFF during listening
             if _hotkey_toggle_event.is_set():
                 _hotkey_toggle_event.clear()
                 _is_active = False
                 break
 
+            # 3. Handle NO SPEECH (Silence)
             if not cmd or not cmd.strip():
-                # Silence timeout after speaking -> prompt user or auto-close
-                safe_ui_update("Ready (Ctrl+Alt+J to close) 🟢", "#10b981")
-                # Wait up to 8 seconds for follow-up speech or close hotkey
-                t_start = time.time()
-                while time.time() - t_start < 8.0:
-                    if _hotkey_toggle_event.is_set():
-                        _hotkey_toggle_event.clear()
-                        _is_active = False
-                        break
-                    time.sleep(0.2)
-                _is_active = False
-                break
+                # STATE: IDLE — Jarvis quietly waits for speech; NEVER shuts down!
+                safe_ui_update("Jarvis Online 🟢", "#10b981")
+                time.sleep(0.08)
+                continue
 
-            # Clean any legacy "Hey Jarvis" prefix if user said it out of habit
+            # 4. User spoke! Clean any optional leading wake prefix
             clean_cmd = cmd.strip()
-            for prefix in ("hey jarvis", "hi jarvis", "jarvis", "हे जार्विस", "जार्विस", "hey jervis"):
+            for prefix in ("hey jarvis", "hi jarvis", "jarvis", "हे जार्विस", "जार्विस", "hey jervis", "jervis"):
                 if clean_cmd.lower().startswith(prefix):
                     clean_cmd = clean_cmd[len(prefix):].strip(",- ")
             if not clean_cmd:
                 clean_cmd = cmd.strip()
 
-            # Check if user asked to sleep or exit
-            if clean_cmd.lower() in ("goodbye", "bye", "sleep", "exit", "quit", "close"):
+            # Check for explicit verbal shutdown
+            if clean_cmd.lower() in ("shutdown jarvis", "turn off jarvis", "deactivate jarvis", "stop jarvis", "exit jarvis"):
                 _is_active = False
                 break
 
-            # 1. THINKING MODE
+            # 5. STATE: PROCESSING
             safe_ui_update("Thinking... 🧠", "#f59e0b")
-            print(f"[Jarvis] Thinking on: '{clean_cmd}'")
+            print(f"[STATE] PROCESSING: '{clean_cmd}'")
             reply, should_exit = commands.handle_command(clean_cmd)
 
-            # Check if hotkey was pressed to close during thinking
+            # Check if hotkey was pressed to turn OFF during processing
             if _hotkey_toggle_event.is_set():
                 _hotkey_toggle_event.clear()
                 _is_active = False
                 break
 
-            # 2. SPEAKING MODE
+            # 6. STATE: SPEAKING
             safe_ui_update("Speaking... 💬", "#a855f7")
-            print(f"[Jarvis] Replying: '{reply}'")
+            print(f"[STATE] SPEAKING: '{reply}'")
             voice.speak(reply)
 
-            if should_exit:
-                os._exit(0)
+            if should_exit is True:
+                _is_active = False
+                break
 
-            # Check if hotkey was pressed during speaking
+            # Check if hotkey was pressed to turn OFF during speech
             if _hotkey_toggle_event.is_set():
                 _hotkey_toggle_event.clear()
                 _is_active = False
                 break
 
-            # Prompt for follow-up
+            # 7. Return to LISTENING / IDLE for natural continuous conversation
             safe_ui_update("Listening... 🎙️", "#22d3ee")
 
-        # CLOSE / SHUT DOWN TO DORMANT
-        voice.stop_speech()
+        # STATE: TURNING OFF
+        voice.stop_speaking()
         voice.play_audio_cue("standby")
+        safe_ui_update("Jarvis Offline 🔴", "#ef4444")
+        voice.speak("Jarvis offline.")
+        session_context.context.clear()
         safe_ui_hide()
         _is_active = False
-        print("[Jarvis] Closed. Press [Ctrl + Alt + J] whenever you need me.")
+        print("[STATE] OFF — Jarvis is dormant. Press [Ctrl + Alt + J] to start.")
 
 
 def start():
